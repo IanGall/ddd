@@ -1,5 +1,6 @@
 package cn.iantech.infrastructure.auth;
 
+import cn.iantech.domain.auth.model.AuthTokenFormat;
 import cn.iantech.redis.RedisKeyBuilder;
 import cn.iantech.redis.RedisKeyScope;
 
@@ -8,7 +9,10 @@ import cn.iantech.redis.RedisKeyScope;
  */
 final class AuthRedisKey {
 
-    static final String SESSION_NAMESPACE = "auth:session:v4";
+    /**
+     * 会话命名空间版本跟随 Token 格式版本，避免两处版本常量漂移导致旧 Token 路由到错误命名空间。
+     */
+    static final String SESSION_NAMESPACE = "auth:session:" + AuthTokenFormat.VERSION;
     static final String RISK_NAMESPACE = "auth:risk:v1";
 
     private AuthRedisKey() {

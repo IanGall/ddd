@@ -7,6 +7,7 @@ import cn.iantech.domain.auth.infra.IAuthIdGenerator;
 import cn.iantech.domain.auth.infra.IAuthRiskStore;
 import cn.iantech.domain.auth.infra.IAuthSessionStore;
 import cn.iantech.domain.auth.model.AuthSession;
+import cn.iantech.domain.auth.model.AuthTokenFormat;
 import cn.iantech.domain.auth.model.AuthTokenReference;
 import cn.iantech.domain.auth.model.AuthUserTypes;
 import cn.iantech.domain.auth.model.AuthenticatedIdentity;
@@ -28,7 +29,6 @@ import static cn.iantech.common.constant.Constants.ResponseCode.*;
 @Service
 public class AuthCaseService {
     private static final String TOKEN_TYPE = "Bearer";
-    private static final String TOKEN_VERSION = "v4";
     private static final int TOKEN_BYTES = 32;
     private static final int TOKEN_SECRET_LENGTH = 43;
     private static final int MAXIMUM_ACTIVE_FAMILIES = 10;
@@ -276,7 +276,7 @@ public class AuthCaseService {
     private String randomToken(Long userId) {
         byte[] bytes = new byte[TOKEN_BYTES];
         secureRandom.nextBytes(bytes);
-        return TOKEN_VERSION + "." + userId + "."
+        return AuthTokenFormat.VERSION + "." + userId + "."
                 + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
@@ -285,7 +285,8 @@ public class AuthCaseService {
             throw unauthorized("令牌无效或已过期");
         }
         String[] parts = token.split("\\.", -1);
-        if (parts.length != 3 || !TOKEN_VERSION.equals(parts[0]) || parts[2].length() != TOKEN_SECRET_LENGTH) {
+        if (parts.length != 3 || !AuthTokenFormat.VERSION.equals(parts[0])
+                || parts[2].length() != TOKEN_SECRET_LENGTH) {
             throw unauthorized("令牌无效或已过期");
         }
         try {
