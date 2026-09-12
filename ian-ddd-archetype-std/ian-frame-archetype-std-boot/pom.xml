@@ -21,6 +21,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- N+1 检测：统计服务调用期间真实执行的 SELECT 与远程调用，用于回归防护。 -->
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ddd-test-starter</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>
             <artifactId>ddd-common</artifactId>

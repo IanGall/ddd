@@ -63,6 +63,12 @@
             <artifactId>coverage-junit-extension</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- N+1 检测：统计网关消费端每次业务流程发起的远程调用次数。 -->
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ddd-test-starter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
