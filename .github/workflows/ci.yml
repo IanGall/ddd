@@ -17,16 +17,13 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: 构建并安装 ddd-base（含覆盖率门槛）
-        run: mvn -B -f ddd-base/pom.xml install -Pcoverage-gate
+      # 单次根构建覆盖全部模块，避免 std / gateway 被重复构建。
+      # -Pcoverage-gate 激活各父 pom 的分档单服务覆盖率门槛（ddd-base / std / gateway）。
+      # 分布式 E2E 覆盖率不在 CI 运行：需要 Nacos、Redis、MySQL 与真实服务，用 coverage-e2e.sh 本地或专用流水线执行。
+      - name: 构建并验证（含单服务覆盖率门槛）
+        run: mvn -B install -Pcoverage-gate
 
-      - name: 构建并安装标准服务
-        run: mvn -B -f ian-ddd-archetype-std/pom.xml install
-
-      - name: 构建并验证网关
-        run: mvn -B -f ian-ddd-gateway/pom.xml verify
-
-      - name: 上传 JaCoCo 覆盖率报告
+      - name: 上传单服务覆盖率报告
         if: always()
         uses: actions/upload-artifact@v4
         with:

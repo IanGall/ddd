@@ -35,6 +35,29 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COVERAGE_DIR="${SCRIPT_DIR}"                              # <workspace>/ddd-base/ian-ddd-coverage
 
+# JaCoCo 版本唯一来源：仓库根目录的 .mvn/jacoco-version（与 ddd-base/pom.xml 的 jacoco.version 保持一致）。
+# 脚本不再硬编码版本号，避免升级时漏改导致 Agent 与报告解析版本不一致（表现为覆盖率静默为 0）。
+read_jacoco_version() {
+    local probe="${SCRIPT_DIR}"
+    local i=0
+    while (( i < 12 )); do
+        if [[ -f "${probe}/.mvn/jacoco-version" ]]; then
+            tr -d '[:space:]' < "${probe}/.mvn/jacoco-version"
+            return 0
+        fi
+        probe="$(dirname "${probe}")"
+        (( i++ )) || true
+    done
+    return 1
+}
+
+JACOCO_VERSION="${JACOCO_VERSION:-$(read_jacoco_version || true)}"
+[[ -n "${JACOCO_VERSION}" ]] || {
+    echo "[e2e] 无法确定 JaCoCo 版本：请确认仓库根目录存在 .mvn/jacoco-version，或设置 JACOCO_VERSION" >&2
+    exit 1
+}
+JACOCO_AGENT_JAR="${JACOCO_AGENT_JAR:-${HOME}/.m2/repository/org/jacoco/org.jacoco.agent/${JACOCO_VERSION}/org.jacoco.agent-${JACOCO_VERSION}-runtime.jar}"
+
 # 工作区根目录：包含 ddd-base 与 Gateway 工程的目录。
 # 默认从当前模块位置推导，可用 WORKSPACE_DIR 覆盖。
 detect_workspace_root() {
@@ -274,7 +297,7 @@ preflight() {
     command -v lsof >/dev/null || fail "缺少 lsof"
     command -v curl >/dev/null || fail "缺少 curl"
 
-    local jacoco_jar="${HOME}/.m2/repository/org/jacoco/org.jacoco.agent/0.8.13/org.jacoco.agent-0.8.13-runtime.jar"
+    local jacoco_jar="${JACOCO_AGENT_JAR}"
     [[ -f "${jacoco_jar}" ]] || fail "缺少 jacocoagent: ${jacoco_jar}"
 
     for port in 8848 6379 3306; do

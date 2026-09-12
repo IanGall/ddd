@@ -40,6 +40,7 @@
         <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
         <maven.checkstyle.plugin.version>3.5.0</maven.checkstyle.plugin.version>
+        <!-- JaCoCo 版本：Shell 脚本统一读取仓库根目录的 .mvn/jacoco-version，升级时必须与此处同步修改 -->
         <jacoco.version>0.8.13</jacoco.version>
     </properties>
 

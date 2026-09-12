@@ -14,7 +14,26 @@ COVERAGE_AGENT_NAME="${COVERAGE_AGENT_NAME:-gateway}"
 COVERAGE_AGENT_PORT="${COVERAGE_AGENT_PORT:-6300}"
 COVERAGE_INCLUDES="${COVERAGE_INCLUDES:-cn.iantech.*}"
 
-JACOCO_VERSION="${JACOCO_VERSION:-0.8.13}"
+# JaCoCo 版本唯一来源：仓库根目录的 .mvn/jacoco-version（与 ddd-base/pom.xml 的 jacoco.version 保持一致）
+read_jacoco_version() {
+  local probe="${SCRIPT_DIR}"
+  local i=0
+  while (( i < 12 )); do
+    if [[ -f "${probe}/.mvn/jacoco-version" ]]; then
+      tr -d '[:space:]' < "${probe}/.mvn/jacoco-version"
+      return 0
+    fi
+    probe="$(dirname "${probe}")"
+    (( i++ )) || true
+  done
+  return 1
+}
+
+JACOCO_VERSION="${JACOCO_VERSION:-$(read_jacoco_version || true)}"
+if [[ -z "${JACOCO_VERSION}" ]]; then
+  echo "无法确定 JaCoCo 版本：请确认仓库根目录存在 .mvn/jacoco-version，或设置 JACOCO_VERSION" >&2
+  exit 1
+fi
 JACOCO_AGENT_JAR="${JACOCO_AGENT_JAR:-${HOME}/.m2/repository/org/jacoco/org.jacoco.agent/${JACOCO_VERSION}/org.jacoco.agent-${JACOCO_VERSION}-runtime.jar}"
 
 if [[ ! -f "${JACOCO_AGENT_JAR}" ]]; then

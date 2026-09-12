@@ -49,4 +49,48 @@
         <module>gateway-app</module>
     </modules>
 
+    <profiles>
+        <!--
+          覆盖率门槛：同 id 覆盖 ddd-base 的通用 60% 规则，按模块当前水平设防回退阈值。
+          阈值取“当前覆盖率向下取整到 5%”，只挡回退、不阻塞正常演进。
+        -->
+        <profile>
+            <id>coverage-gate</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <rule>
+                                            <element>BUNDLE</element>
+                                            <includes>
+                                                <include>cn.iantech:ian-ddd-gateway</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.60</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>

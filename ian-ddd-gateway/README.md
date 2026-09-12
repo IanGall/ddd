@@ -124,11 +124,27 @@ HTTP 错误统一返回 `{"code","info","data"}`，并保留 `X-Request-Id`。�
 curl "http://127.0.0.1:8092/actuator/health"
 ```
 
-### 分布式 E2E 覆盖率
+### 覆盖率
+
+本工程有两个覆盖率数字，口径不同、互不可替代：
+
+- **单服务覆盖率**（`mvn verify -Pcoverage-gate`）：本模块单元测试对 `src/main` 的覆盖，门槛 60%，不需要外部依赖。
+- **分布式 E2E 覆盖率**：从 Gateway 发起的真实跨服务调用链，覆盖 Gateway + 标准服务，需要中间件与已启动的服务。
+
+完整对照与门槛配置见 `ddd-base/ian-ddd-coverage/README.md`。
+
+#### 分布式 E2E 覆盖率
 
 `gateway-app` 已接入 `coverage-junit-extension`，测试只需标注 `@CoversE2e`，
-即可自动采集 Gateway 与标准服务的 JaCoCo 覆盖率并生成报告。完整说明见
-`ddd-base/ian-ddd-coverage/README.md`。
+即可自动采集 Gateway 与标准服务的 JaCoCo 覆盖率并生成报告。
+
+推荐直接用一键流水线（自动构建、启停服务、跑全部 E2E 用例并输出 **并集**覆盖率）：
+
+```bash
+ddd-base/ian-ddd-coverage/coverage-e2e.sh
+```
+
+手工分步执行：
 
 ```bash
 # 1. 启动覆盖率控制器（8099）
@@ -138,17 +154,16 @@ mvn -f ddd-base/ian-ddd-coverage/coverage-controller/pom.xml spring-boot:run
 ian-ddd-archetype-std/docs/dev-ops/start-with-coverage.sh
 ian-ddd-gateway/dev-ops/start-with-coverage.sh
 
-# 3. 运行端到端覆盖率测试
-RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=GatewayCoverageE2eTest
+# 3. 运行全部 E2E 覆盖率测试
+RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest='GatewayCoverageE2eTest,*E2eTest'
 ```
 
-`GatewayCoverageE2eTest` 默认只覆盖健康检查；提供管理员账号后会真实登录，从而覆盖
-Gateway → Dubbo → AuthService 完整调用链：
+`GatewayCoverageE2eTest` 是最小冒烟用例（健康检查 + 可选的真实登录）；完整业务链路在
+`src/test/java/cn/iantech/gateway/e2e/` 下的 `*E2eTest`，覆盖 RBAC 生命周期、认证令牌轮换与重放防护、
+C 端注册登录、渠道凭证管理与异常语义。
 
-```bash
-COVERAGE_E2E_LOGIN_NAME=... COVERAGE_E2E_LOGIN_PASSWORD=... \
-  RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=GatewayCoverageE2eTest
-```
+> 登录接口有 IP 风控：同一 IP 60 秒内 30 次登录尝试会返回 `AUTH_RATE_LIMITED`。
+> 一轮 E2E 约消耗 20 次登录，连续重跑请间隔 60 秒以上。
 
 未设置 `RUN_COVERAGE_E2E=true` 时该测试自动跳过，常规构建与 CI 不受影响。
 

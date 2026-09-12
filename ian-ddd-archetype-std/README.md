@@ -68,6 +68,17 @@ IntelliJ 使用 `dev` Profile 时可以直接启动；调用本地平台开户�
 `X-Platform-Token: __REMOVED__`。生产启动时，将上述变量配置到 Run/Debug Configuration 或部署 Secret 中；缺少
 `PLATFORM_ADMIN_TOKEN` 时 Provider 会明确失败。
 
+## 覆盖率
+
+本工程有两个覆盖率数字，口径不同、互不可替代：
+
+- **单服务覆盖率**（`mvn verify -Pcoverage-gate`）：本工程各模块单元测试对 `src/main` 的覆盖，不需要外部依赖。
+  当前门槛：`domain` 35%、`infrastructure` 15%；`trigger` / `api` 尚无测试、暂无门槛。
+- **分布式 E2E 覆盖率**：由 Gateway 发起的真实跨服务调用链，覆盖本服务的 trigger / domain / infrastructure / api。
+  需要本服务以 Agent 模式启动（`docs/dev-ops/start-with-coverage.sh`，Agent 端口 6301）并配合覆盖率控制器。
+
+完整对照、门槛配置与一键流水线见 `ddd-base/ian-ddd-coverage/README.md`。
+
 ## Maven - 阿里云镜像
 
 ```java

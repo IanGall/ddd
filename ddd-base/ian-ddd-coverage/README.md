@@ -3,6 +3,52 @@
 Dubbo 微服务分布式 E2E 覆盖率基础设施。测试只写在 Gateway 层，覆盖率由各服务 JVM 内的 JaCoCo Agent 独立采集，
 再由控制器统一 dump、merge、生成报告。
 
+## 本仓库有两套覆盖率，先看清该看哪个
+
+|            | 单服务覆盖率（构建内置）                                 | 分布式 E2E 覆盖率（本模块）                                   |
+|------------|----------------------------------------------------------|---------------------------------------------------------------|
+| 怎么跑     | `mvn verify -Pcoverage-gate`                             | `ddd-base/ian-ddd-coverage/coverage-e2e.sh`                   |
+| 测什么     | 各模块**自己的单元测试**执行路径                         | 从 Gateway 发起的**真实跨服务调用链**                         |
+| 覆盖范围   | 各模块 `src/main`（`ddd-base` + std + gateway 已配门槛） | Gateway + 标准服务的 trigger/domain/infrastructure/api        |
+| 外部依赖   | 无（离线可跑、秒级反馈）                                 | Nacos / Redis / MySQL + 服务全部启动（约 40 秒）              |
+| 阈值       | 见下「门槛配置」                                         | 并集行覆盖目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可调） |
+| 数字从哪看 | `target/site/jacoco/index.html`                          | `coverage/sessions/<id>/reports/index.html`                   |
+
+**两者分母不同、不可互相替代**：单服务覆盖率保护 `ddd-common`、`ddd-redis-starter`、`ddd-id-generator-starter`
+这类 **只被单元测试覆盖**的基础模块；E2E 覆盖率则覆盖 `trigger`/`api` 这些 **只在真实调用链里才会执行**的适配层。
+把两者相加或对比大小都没有意义。
+
+### 门槛配置
+
+单服务门槛按模块分档，阈值取「当前覆盖率向下取整到 5%」，只挡回退、不阻塞正常演进：
+
+| 模块                                                                              | 阈值     | 当前实测             |
+|-----------------------------------------------------------------------------------|----------|----------------------|
+| `ddd-common` / `ddd-context-*` / `ddd-redis-starter` / `ddd-id-generator-starter` | 60%      | 70% – 98%            |
+| `coverage-controller` / `coverage-junit-extension`                                | 60%      | 81% / 60.2%          |
+| `ian-ddd-gateway`（gateway-app）                                                  | 60%      | 74.0%                |
+| `ian-frame-archetype-std-domain`                                                  | 35%      | 40.6%                |
+| `ian-frame-archetype-std-infrastructure`                                          | 15%      | 21.1%                |
+| `ian-frame-archetype-std-trigger` / `-api`                                        | 暂无门槛 | 尚无测试，补测后再加 |
+
+门槛定义位置：
+
+- `ddd-base/pom.xml` → `coverage-gate` profile：通用 BUNDLE 60% 规则
+- `ian-ddd-gateway/pom.xml` → 同 id profile，`includes` 限定到 gateway-app
+- `ian-ddd-archetype-std/pom.xml` → 同 id profile，domain / infrastructure 各一条规则
+
+> 同 id profile 在子工程中 **覆盖**父工程的 `<rules>`：子工程声明的规则集整体替换父工程的规则集，不会叠加。
+> 因此子工程必须写全自己需要的规则。
+>
+> 规则作用域用 `includes` 限定到具体模块；未命中的模块（如 std 的 trigger / api）不受该规则约束，
+> 加了测试之后同样可以正常跑 `-Pcoverage-gate`。
+
+给新模块加门槛：在所属父 pom 的 `coverage-gate` profile 里追加一条 `<rule>`，
+用 `<includes><include>groupId:artifactId</include></includes>` 限定作用域，避免误伤其它模块。
+
+JaCoCo 版本唯一来源：仓库根目录的 `.mvn/jacoco-version`（Shell 脚本读取），
+升级时同步修改 `ddd-base/pom.xml` 的 `jacoco.version`。
+
 ```text
                     JUnit 测试（只调用 Gateway）
                               │ HTTP
