@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IChannelDataScopeDao">
+    <resultMap id="dataMap" type="cn.iantech.infrastructure.persistent.po.ChannelDataScopePO">
+        <id column="id" property="id"/>
+        <result column="channel_id" property="channelId"/>
+        <result column="scope_type" property="scopeType"/>
+        <result column="scope_value" property="scopeValue"/>
+        <result column="status" property="status"/>
+        <result column="version" property="version"/>
+        <result column="created_by_user_id" property="createdByUserId"/>
+        <result column="updated_by_user_id" property="updatedByUserId"/>
+    </resultMap>
+    <select id="selectEnabled" resultMap="dataMap">
+        SELECT id, channel_id, scope_type, scope_value, status, version, created_by_user_id, updated_by_user_id
+        FROM channel_data_scope
+        WHERE channel_id = #{channelId} AND scope_type = #{scopeType} AND status = 1 AND deleted = 0
+        ORDER BY id
+    </select>
+    <delete id="deleteByChannelAndType">
+        DELETE FROM channel_data_scope WHERE channel_id = #{channelId} AND scope_type = #{scopeType}
+    </delete>
+    <insert id="insertBatch">
+        INSERT INTO channel_data_scope
+            (id, channel_id, scope_type, scope_value, status, version, created_by_user_id, updated_by_user_id,
+             deleted, create_time, update_time)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{item.id}, #{item.channelId}, #{item.scopeType}, #{item.scopeValue}, #{item.status}, #{item.version},
+             #{item.createdByUserId}, #{item.updatedByUserId}, #{item.deleted}, NOW(), NOW())
+        </foreach>
+    </insert>
+</mapper>

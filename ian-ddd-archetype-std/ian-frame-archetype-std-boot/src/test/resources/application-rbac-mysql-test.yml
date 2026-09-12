@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${RBAC_TEST_MYSQL_HOST:127.0.0.1}:${RBAC_TEST_MYSQL_PORT:3306}/${RBAC_TEST_MYSQL_DATABASE:ddd_rbac_test}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=10000&socketTimeout=60000&tcpKeepAlive=true
+    username: ${RBAC_TEST_MYSQL_USERNAME:root}
+    password: ${RBAC_TEST_MYSQL_PASSWORD}
+  main:
+    allow-bean-definition-overriding: true
+  sql:
+    init:
+      mode: never
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.redisson.spring.starter.RedissonAutoConfigurationV4
+
+kafka:
+  enabled: false
+
+mybatis:
+  mapper-locations: classpath:/mybatis/mapper/*.xml
+  config-location: classpath:/mybatis/config/mybatis-config.xml
+
+dubbo:
+  enabled: false
+
+xxl:
+  job:
+    admin:
+      addresses: http://127.0.0.1:18080/xxl-job-admin
+    accessToken: test_token
+    executor:
+      appname: rbac-mysql-test
+      address:
+      ip: 127.0.0.1
+      port: 19999
+      logpath: ./target/xxl-job/logs
+      logretentiondays: 3
+
+logging:
+  level:
+    root: info
+    cn.iantech: debug
+    org.mybatis: debug
+    org.apache.ibatis: debug

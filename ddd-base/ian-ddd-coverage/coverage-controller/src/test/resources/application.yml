@@ -1,0 +1,22 @@
+coverage:
+  session:
+    work-directory: ${java.io.tmpdir}/ddd-coverage-test
+  agents:
+    - name: reachable
+      host: 127.0.0.1
+      port: 6399
+    - name: unreachable
+      host: 127.0.0.1
+      port: 6398
+  reports:
+    # 单元测试用当前模块的绝对路径，避免受工作区根目录识别影响
+    - name: reachable
+      classes-directories:
+        - ${user.dir}/target/test-classes
+      source-directories:
+        - ${user.dir}/src/test/java
+    - name: unreachable
+      classes-directories:
+        - ${user.dir}/target/test-classes
+      source-directories:
+        - ${user.dir}/src/test/java

@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IRbacRoleDao">
+
+    <resultMap id="dataMap" type="cn.iantech.infrastructure.persistent.po.RbacRolePO">
+        <id column="id" property="id"/>
+        <result column="account_id" property="accountId"/>
+        <result column="role_code" property="roleCode"/>
+        <result column="role_name" property="roleName"/>
+        <result column="role_desc" property="roleDesc"/>
+        <result column="status" property="status"/>
+        <result column="deleted" property="deleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="cn.iantech.infrastructure.persistent.po.RbacRolePO" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rbac_role (
+            account_id,
+            role_code,
+            role_name,
+            role_desc,
+            status,
+            deleted,
+            create_time,
+            update_time
+        ) VALUES (
+            #{accountId},
+            #{roleCode},
+            #{roleName},
+            #{roleDesc},
+            #{status},
+            #{deleted},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <select id="selectById" resultMap="dataMap">
+        SELECT id, account_id, role_code, role_name, role_desc, status, deleted, create_time, update_time
+        FROM rbac_role
+        WHERE account_id = #{accountId} AND id = #{id}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectByRoleCode" resultMap="dataMap">
+        SELECT id, account_id, role_code, role_name, role_desc, status, deleted, create_time, update_time
+        FROM rbac_role
+        WHERE account_id = #{accountId} AND role_code = #{roleCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectPageCount" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM rbac_role
+        WHERE account_id = #{accountId} AND deleted = 0
+        <if test="roleCode != null and roleCode != ''">
+            AND role_code LIKE CONCAT('%', #{roleCode}, '%')
+        </if>
+        <if test="roleName != null and roleName != ''">
+            AND role_name LIKE CONCAT('%', #{roleName}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <select id="selectPage" resultMap="dataMap">
+        SELECT id, account_id, role_code, role_name, role_desc, status, deleted, create_time, update_time
+        FROM rbac_role
+        WHERE account_id = #{accountId} AND deleted = 0
+        <if test="roleCode != null and roleCode != ''">
+            AND role_code LIKE CONCAT('%', #{roleCode}, '%')
+        </if>
+        <if test="roleName != null and roleName != ''">
+            AND role_name LIKE CONCAT('%', #{roleName}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <update id="updateById">
+        UPDATE rbac_role
+        <set>
+            <if test="item.roleCode != null and item.roleCode != ''">
+                role_code = #{item.roleCode},
+            </if>
+            <if test="item.roleName != null and item.roleName != ''">
+                role_name = #{item.roleName},
+            </if>
+            <if test="item.roleDesc != null">
+                role_desc = #{item.roleDesc},
+            </if>
+            <if test="item.status != null">
+                status = #{item.status},
+            </if>
+            update_time = NOW()
+        </set>
+        WHERE account_id = #{accountId} AND id = #{item.id}
+          AND deleted = 0
+    </update>
+
+    <update id="logicDeleteById">
+        UPDATE rbac_role
+        SET deleted = 1,
+            update_time = NOW()
+        WHERE account_id = #{accountId} AND id = #{id}
+          AND deleted = 0
+    </update>
+
+    <select id="selectExistingIds" resultType="java.lang.Long">
+        SELECT id
+        FROM rbac_role
+        WHERE account_id = #{accountId} AND deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+</mapper>

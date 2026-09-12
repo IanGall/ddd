@@ -1,0 +1,32 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: ian-ddd-gateway
+  profiles:
+    active: dev
+
+# 生产环境按部署约束保持 HTTP，渠道请求通过签名认证，不启用 TLS/mTLS。
+
+dubbo:
+  application:
+    name: ian-ddd-gateway
+    qos-enable: false
+    metadata-type: remote
+    metadata-service-protocol: tri
+  consumer:
+    check: false
+
+  metrics:
+    export-metrics-service: false
+
+logging:
+  level:
+    root: info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

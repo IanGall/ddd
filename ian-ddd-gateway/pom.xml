@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.iantech</groupId>
+        <artifactId>ddd-base</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../ddd-base/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ian-ddd-gateway-parent</artifactId>
+    <packaging>pom</packaging>
+
+    <name>ian-ddd-gateway-parent</name>
+    <description>DDD 网关参考应用聚合工程</description>
+
+    <properties>
+        <ddd.base.version>1.0-SNAPSHOT</ddd.base.version>
+        <ddd.coverage.version>1.0-SNAPSHOT</ddd.coverage.version>
+        <ian.std.version>1.0-SNAPSHOT</ian.std.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>ddd-base-bom</artifactId>
+                <version>${ddd.base.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>ian-frame-archetype-std-api</artifactId>
+                <version>${ian.std.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>coverage-junit-extension</artifactId>
+                <version>${ddd.coverage.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <modules>
+        <module>gateway-app</module>
+    </modules>
+
+</project>

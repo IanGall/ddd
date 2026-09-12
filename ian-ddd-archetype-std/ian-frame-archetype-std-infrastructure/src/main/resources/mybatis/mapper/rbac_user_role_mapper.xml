@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IRbacUserRoleDao">
+
+    <select id="selectRoleIdsByUserId" resultType="java.lang.Long">
+        SELECT role_id
+        FROM rbac_user_role
+        WHERE account_id = #{accountId} AND user_id = #{userId}
+        ORDER BY role_id ASC
+    </select>
+
+    <delete id="deleteByUserIdAndRoleIds">
+        DELETE FROM rbac_user_role
+        WHERE account_id = #{accountId} AND user_id = #{userId}
+          AND role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" close=")" separator=",">
+            #{roleId}
+        </foreach>
+    </delete>
+
+    <insert id="batchInsert">
+        INSERT INTO rbac_user_role (account_id, user_id, role_id, create_time)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.accountId}, #{item.userId}, #{item.roleId}, NOW())
+        </foreach>
+    </insert>
+
+    <delete id="deleteAllByUserId">
+        DELETE FROM rbac_user_role
+        WHERE account_id = #{accountId} AND user_id = #{userId}
+    </delete>
+
+    <delete id="deleteAllByRoleId">
+        DELETE FROM rbac_user_role
+        WHERE account_id = #{accountId} AND role_id = #{roleId}
+    </delete>
+
+</mapper>

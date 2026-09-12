@@ -1,0 +1,39 @@
+server:
+  port: 8091
+
+platform:
+  security:
+    admin-token: __REMOVED__
+
+channel:
+  security:
+    encryption:
+      key-id: test-key-v1
+      master-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
+# 默认测试禁止连接外部中间件；集成测试通过独立 Profile 和环境变量显式启用。
+spring:
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.redisson.spring.starter.RedissonAutoConfigurationV4
+
+kafka:
+  enabled: false
+
+xxl:
+  job:
+    enabled: false
+
+dubbo:
+  enabled: false
+
+ddd:
+  id-generator:
+    enabled: false
+
+# 日志
+logging:
+  level:
+    root: info
+  config: classpath:logback-spring.xml

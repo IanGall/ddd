@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IRbacAuthorizationDao">
+
+    <sql id="activePermissionJoin">
+        FROM rbac_user u
+        INNER JOIN rbac_user_role ur
+            ON ur.account_id = u.account_id AND ur.user_id = u.id
+        INNER JOIN rbac_role r
+            ON r.account_id = ur.account_id AND r.id = ur.role_id
+        INNER JOIN rbac_role_permission rp
+            ON rp.account_id = r.account_id AND rp.role_id = r.id
+        INNER JOIN rbac_permission p
+            ON p.account_id = rp.account_id AND p.id = rp.permission_id
+        WHERE u.account_id = #{accountId}
+          AND u.id = #{userId}
+          AND u.status = 1 AND u.deleted = 0
+          AND r.status = 1 AND r.deleted = 0
+          AND p.status = 1 AND p.deleted = 0
+    </sql>
+
+    <select id="existsPermission" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            <include refid="activePermissionJoin"/>
+              AND p.perm_code = #{permissionCode}
+        )
+    </select>
+
+    <select id="findRoleCodes" resultType="string">
+        SELECT DISTINCT r.role_code
+        FROM rbac_user u
+        INNER JOIN rbac_user_role ur
+            ON ur.account_id = u.account_id AND ur.user_id = u.id
+        INNER JOIN rbac_role r
+            ON r.account_id = ur.account_id AND r.id = ur.role_id
+        WHERE u.account_id = #{accountId}
+          AND u.id = #{userId}
+          AND u.status = 1 AND u.deleted = 0
+          AND r.status = 1 AND r.deleted = 0
+        ORDER BY r.role_code
+    </select>
+
+    <select id="findPermissionCodes" resultType="string">
+        SELECT DISTINCT p.perm_code
+        <include refid="activePermissionJoin"/>
+        ORDER BY p.perm_code
+    </select>
+
+    <select id="findPermissionCodesByRoleIds" resultType="string">
+        SELECT DISTINCT p.perm_code
+        FROM rbac_role_permission rp
+        INNER JOIN rbac_permission p
+            ON p.account_id = rp.account_id AND p.id = rp.permission_id
+        INNER JOIN rbac_role r
+            ON r.account_id = rp.account_id AND r.id = rp.role_id
+        WHERE rp.account_id = #{accountId}
+          AND r.status = 1 AND r.deleted = 0
+          AND p.status = 1 AND p.deleted = 0
+          AND rp.role_id IN
+          <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+              #{roleId}
+          </foreach>
+        ORDER BY p.perm_code
+    </select>
+
+    <select id="findPermissionCodesByIds" resultType="string">
+        SELECT DISTINCT perm_code
+        FROM rbac_permission
+        WHERE account_id = #{accountId}
+          AND status = 1 AND deleted = 0
+          AND id IN
+          <foreach collection="permissionIds" item="permissionId" open="(" separator="," close=")">
+              #{permissionId}
+          </foreach>
+        ORDER BY perm_code
+    </select>
+</mapper>

@@ -1,0 +1,2 @@
+dubboContextConsumer=cn.iantech.context.dubbo.DubboContextConsumerFilter
+dubboContextProvider=cn.iantech.context.dubbo.DubboContextProviderFilter

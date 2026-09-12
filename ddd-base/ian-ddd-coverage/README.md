@@ -1,0 +1,244 @@
+# ian-ddd-coverage
+
+Dubbo 微服务分布式 E2E 覆盖率基础设施。测试只写在 Gateway 层，覆盖率由各服务 JVM 内的 JaCoCo Agent 独立采集，
+再由控制器统一 dump、merge、生成报告。
+
+```text
+                    JUnit 测试（只调用 Gateway）
+                              │ HTTP
+                              ▼
+                       ┌─────────────┐
+                       │   Gateway   │  jacocoagent tcpserver :6300
+                       └──────┬──────┘
+                              │ Dubbo
+                              ▼
+                       ┌─────────────┐
+                       │ 标准服务     │  jacocoagent tcpserver :6301
+                       └─────────────┘
+
+        coverage-controller 主动连接各 Agent，执行 reset / dump / merge / report
+```
+
+## 扩展新服务
+
+从骨架扩展出新服务或新网关时，按 `EXTENDING.md` 接入即可：
+
+1. 服务侧：骨架已内置 `application-coverage.yml` 与 `docs/dev-ops/start-with-coverage.sh`（网关在 `dev-ops/`）
+2. 控制器侧： **运行时注册接口**（推荐，无需改配置重启）或写入 `application.yml`
+3. 流水线：`EXTRA_SERVICES="服务名:项目目录:Agent端口[:健康检查URL]" ./coverage-e2e.sh`
+
+新服务接入控制器，两种方式二选一：
+
+```bash
+# A. 运行时注册（推荐）：注册即生效，并落盘到 <工作目录>/services/，控制器重启自动恢复
+coverage-e2e.sh register order 6302 \
+  "ian-ddd-order/ian-ddd-order-trigger/target/classes,ian-ddd-order/ian-ddd-order-domain/target/classes" \
+  "ian-ddd-order/ian-ddd-order-trigger/src/main/java,ian-ddd-order/ian-ddd-order-domain/src/main/java"
+
+coverage-e2e.sh list              # 查看当前生效的服务
+coverage-e2e.sh unregister order  # 注销（仅限运行时注册的服务）
+```
+
+```yaml
+# B. 写配置文件：改动后需重启控制器
+coverage:
+  agents:
+    - name: order
+      host: 127.0.0.1
+      port: 6302
+  reports:
+    - name: order
+      classes-directories:
+        - ian-ddd-order/ian-ddd-order-trigger/target/classes
+```
+
+HTTP 接口等价形式：
+
+```bash
+curl -X POST http://127.0.0.1:8099/api/coverage/services \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"order","agentPort":6302,
+       "classesDirectories":["ian-ddd-order/ian-ddd-order-trigger/target/classes"],
+       "sourceDirectories":["ian-ddd-order/ian-ddd-order-trigger/src/main/java"],
+       "replace":true}'
+curl http://127.0.0.1:8099/api/coverage/services
+curl -X DELETE http://127.0.0.1:8099/api/coverage/services/order
+```
+
+失败语义：参数非法 400、名称冲突 409（加 `replace=true` 覆盖）、配置文件中的服务不可注销（400/404）。
+
+完整步骤、端口约定、验证方法与排查清单见 [`EXTENDING.md`](EXTENDING.md)。
+
+## 模块
+
+| 模块                       | 职责                                                                               |
+|----------------------------|------------------------------------------------------------------------------------|
+| `coverage-controller`      | 注册 Agent、编排 Session（start/reset/dump/finish）、合并 exec、生成 HTML/XML 报告 |
+| `coverage-junit-extension` | `@CoversE2e` 注解与 JUnit 5 扩展，测试前后自动调用控制器                           |
+
+## 快速开始
+
+### 一键流水线（推荐）
+
+```bash
+# clean 构建 → 启动全部服务（带 Agent）→ 跑 E2E → 打印报告位置 → 自动关停服务
+ddd-base/ian-ddd-coverage/coverage-e2e.sh
+
+# 保留服务运行，便于手工翻报告
+ddd-base/ian-ddd-coverage/coverage-e2e.sh --keep
+```
+
+其他子命令：
+
+| 命令                     | 作用                                 |
+|--------------------------|--------------------------------------|
+| `coverage-e2e.sh`        | 全流程，结束时自动关停本次启动的服务 |
+| `coverage-e2e.sh --keep` | 全流程，保留服务运行                 |
+| `coverage-e2e.sh start`  | 只构建并启动服务                     |
+| `coverage-e2e.sh test`   | 只跑测试（服务需已启动）             |
+| `coverage-e2e.sh report` | 打印最近一次会话的报告位置           |
+| `coverage-e2e.sh status` | 查看路径、服务状态与最近会话         |
+| `coverage-e2e.sh stop`   | 停止全部服务                         |
+
+可用环境变量：`COVERAGE_E2E_LOGIN_NAME` / `COVERAGE_E2E_LOGIN_PASSWORD`（不填则自动开户并缓存凭证）、
+`COVERAGE_SKIP_BUILD=1`（跳过构建快速重跑）、`WORKSPACE_DIR`（覆盖工作区根目录探测）。
+
+前置条件：Nacos (8848)、Redis (6379)、MySQL (3306) 已启动。
+
+### 手动分步执行
+
+#### 1. 启动覆盖率控制器
+
+```bash
+mvn -f ddd-base/ian-ddd-coverage/coverage-controller/pom.xml spring-boot:run
+```
+
+默认监听 `8099`，产物写入 `coverage/sessions/<sessionId>/`。
+
+#### 2. 带 Agent 启动被测服务
+
+```bash
+# Gateway（Agent 端口 6300）
+ian-ddd-gateway/dev-ops/start-with-coverage.sh
+
+# 标准服务（Agent 端口 6301）
+ian-ddd-archetype-std/docs/dev-ops/start-with-coverage.sh
+```
+
+两个脚本只是把 jacocoagent 以 `output=tcpserver` 注入 JVM，服务本身不需要感知控制器。
+
+### 3. 运行 E2E 测试
+
+以 Gateway 的测试为例，加上 `@CoversE2e` 注解即可：
+
+```java
+@CoversE2e(value = "create-order")
+class OrderE2eTest {
+
+    @Test
+    void createOrder() {
+        // 只调用 Gateway 的 HTTP 接口
+    }
+}
+```
+
+执行：
+
+```bash
+RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=GatewayCoverageE2eTest
+```
+
+测试结束后控制台输出：
+
+```text
+[Coverage] 本次测试覆盖率汇总（Session 20260912-093808-9b1fe）
+------------------------------------------------------------
+    gateway: 行覆盖 82.0%（已覆盖 820/1000）
+    std: 行覆盖 76.0%（已覆盖 760/1000）
+    overall: 行覆盖 73.4%（已覆盖 1580/2000）
+------------------------------------------------------------
+报告入口: http://127.0.0.1:8099/api/coverage/sessions/20260912-093808-9b1fe/reports/index.html
+```
+
+## 目录产物
+
+```text
+coverage/sessions/<sessionId>/
+├── gateway.exec          # 各服务原始 execution data
+├── std.exec
+├── overall.exec          # 合并结果
+├── dashboard.html        # 服务级 + 整体覆盖率总览
+└── reports/
+    ├── index.html        # 整体 HTML 报告
+    ├── overall.xml       # 供 CI 解析
+    ├── gateway/index.html
+    └── std/index.html
+```
+
+## classId 一致性校验
+
+JaCoCo 按 `classId` 匹配 execution data 与字节码。当被测进程加载的字节码与生成报告所用的
+`target/classes` 不是同一次构建产物时，classId 不一致， **JaCoCo 不报错，而是把该类当作未覆盖**，
+覆盖率静默变成 0%。
+
+`finish` 阶段会自动比对每个 Agent 上报的 classId 与分析目录的 classId，失配时：
+
+- 控制器日志打出 `WARN`，列出失配的类与两边的 classId；
+- `finish` 响应体新增 `consistency` 字段，测试侧扩展会在汇总后追加警告区块。
+
+```text
+[Coverage] 警告：classId 校验未通过
+  Agent [std] 有 3 个类的字节码与报告目录不一致，这些类的覆盖率被误报为 0%：
+    cn/iantech/cases/auth/service/AuthCaseService（被测进程 0x54b413fa02c17d1a / 报告目录 0xef85aaf9bd9516aa）
+  原因：被测服务启动后源码被重新编译，或服务与报告使用了不同次构建的产物。
+  处理：清理并重新构建后重启被测服务，再执行测试。
+```
+
+因此 **修改代码后必须 clean 重建再重启服务**；`coverage-e2e.sh` 默认就会先 clean 构建再启动。
+
+## 控制器 API
+
+| 方法 | 路径                                     | 说明                                  |
+|------|------------------------------------------|---------------------------------------|
+| POST | `/api/coverage/sessions`                 | 创建 Session，返回 id 与 Agent 连通性 |
+| GET  | `/api/coverage/sessions/{id}`            | 查询 Session 状态                     |
+| POST | `/api/coverage/sessions/{id}/reset`      | 清零探针计数，可传 `agentNames` 过滤  |
+| POST | `/api/coverage/sessions/{id}/dump`       | 采集并累加各服务 exec                 |
+| POST | `/api/coverage/sessions/{id}/finish`     | merge + 生成报告                      |
+| GET  | `/api/coverage/sessions/{id}/report`     | 跳转整体 HTML 报告                    |
+| GET  | `/api/coverage/sessions/{id}/reports/**` | HTML/XML/dashboard 静态资源           |
+
+## 测试侧配置
+
+`gateway-app/src/test/resources/covers-e2e.properties`：
+
+```properties
+coverage.controller.url=http://127.0.0.1:8099
+coverage.agents=gateway,std
+coverage.fail-on-error=false
+```
+
+| 配置项                              | 默认值                  | 说明                             |
+|-------------------------------------|-------------------------|----------------------------------|
+| `coverage.controller.url`           | `http://127.0.0.1:8099` | 控制器地址                       |
+| `coverage.agents`                   | 空（全部）              | 参与采集的 Agent，逗号分隔       |
+| `coverage.enabled`                  | `true`                  | 设为 false 整体关闭采集          |
+| `coverage.fail-on-error`            | `false`                 | 控制器不可用等问题是否让测试失败 |
+| `coverage.require-reachable-agents` | `true`                  | 存在不可达 Agent 时是否直接失败  |
+
+系统属性与环境变量（`COVERAGE_CONTROLLER_URL`、`COVERAGE_AGENTS` 等）优先级高于配置文件。
+
+## 设计要点
+
+- **采集与测试解耦**：Dubbo 只负责业务请求，不传递 coverage 数据；每个 JVM 独立采集。
+- **reset 语义**：JaCoCo 没有独立 reset 指令，采用 `dump(reset=true)`，Agent 会先返回数据再清零。
+- **失败降级**：单个 Agent 不可达只记录失败，不中断流程；测试失败也会执行 dump（`afterEach` 注册）。
+- **并发限制**：同一时刻只允许一个 RUNNING Session，避免多测试互相污染探针数据。
+- **版本一致**：报告使用各服务的 `target/classes`，需保证被测进程与本地 class 来自同一次构建。
+- **同名类**：整体报告要求各服务类名不冲突（本项目 `cn.iantech.gateway.*` 与 `cn.iantech.api/domain/trigger.*` 已满足）。
+
+## 后续扩展
+
+- 并发测试：如需 A/B 测试同时采集且互不干扰，需要按线程/请求维度隔离探针，属于 Agent 级改造。
+- 多副本部署：K8s 场景不能通过 Service 名 dump（会随机命中一个 Pod），需要按 Pod IP 逐个采集后合并。
+- 调用链关联：`ddd-context-dubbo` 已透传 `requestId` 等字段，可扩展 `coverageSessionId` 关联单测试用例经过的服务。

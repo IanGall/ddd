@@ -1,0 +1,40 @@
+server:
+  port: 8099
+
+spring:
+  application:
+    name: coverage-controller
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    cn.iantech.coverage: INFO
+
+coverage:
+  agents:
+    # 端口分配为工程约定：gateway 固定 6300，其余服务依次递增。
+    # 各被测服务启动时通过 -javaagent 注入 jacocoagent，sessionid 需与 name 一致。
+    - name: gateway
+      host: 127.0.0.1
+      port: 6300
+    - name: std
+      host: 127.0.0.1
+      port: 6301
+  reports:
+    - name: gateway
+      classes-directories:
+        - ian-ddd-gateway/gateway-app/target/classes
+      source-directories:
+        - ian-ddd-gateway/gateway-app/src/main/java
+    - name: std
+      classes-directories:
+        - ian-ddd-archetype-std/ian-frame-archetype-std-trigger/target/classes
+        - ian-ddd-archetype-std/ian-frame-archetype-std-domain/target/classes
+        - ian-ddd-archetype-std/ian-frame-archetype-std-infrastructure/target/classes
+        - ian-ddd-archetype-std/ian-frame-archetype-std-api/target/classes
+      source-directories:
+        - ian-ddd-archetype-std/ian-frame-archetype-std-trigger/src/main/java
+        - ian-ddd-archetype-std/ian-frame-archetype-std-domain/src/main/java
+        - ian-ddd-archetype-std/ian-frame-archetype-std-infrastructure/src/main/java
+        - ian-ddd-archetype-std/ian-frame-archetype-std-api/src/main/java

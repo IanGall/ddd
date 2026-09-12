@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IRbacUserDao">
+
+    <resultMap id="dataMap" type="cn.iantech.infrastructure.persistent.po.RbacUserPO">
+        <id column="id" property="id"/>
+        <result column="account_id" property="accountId"/>
+        <result column="username" property="username"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="display_name" property="displayName"/>
+        <result column="email" property="email"/>
+        <result column="mobile" property="mobile"/>
+        <result column="status" property="status"/>
+        <result column="deleted" property="deleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="cn.iantech.infrastructure.persistent.po.RbacUserPO">
+        INSERT INTO rbac_user (
+            id,
+            account_id,
+            username,
+            password_hash,
+            display_name,
+            email,
+            mobile,
+            status,
+            deleted,
+            create_time,
+            update_time
+        ) VALUES (
+            #{id},
+            #{accountId},
+            #{username},
+            #{passwordHash},
+            #{displayName},
+            #{email},
+            #{mobile},
+            #{status},
+            #{deleted},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <select id="selectById" resultMap="dataMap">
+        SELECT id, account_id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time
+        FROM rbac_user
+        WHERE account_id = #{accountId} AND id = #{id}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectByUsername" resultMap="dataMap">
+        SELECT id, account_id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time
+        FROM rbac_user
+        WHERE account_id = #{accountId} AND username = #{username}
+        LIMIT 1
+    </select>
+
+    <select id="selectPageCount" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM rbac_user
+        WHERE account_id = #{accountId} AND deleted = 0
+        <if test="username != null and username != ''">
+            AND username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <select id="selectPage" resultMap="dataMap">
+        SELECT id, account_id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time
+        FROM rbac_user
+        WHERE account_id = #{accountId} AND deleted = 0
+        <if test="username != null and username != ''">
+            AND username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <update id="updateById">
+        UPDATE rbac_user
+        <set>
+            <if test="item.passwordHash != null and item.passwordHash != ''">
+                password_hash = #{item.passwordHash},
+            </if>
+            <if test="item.displayName != null">
+                display_name = #{item.displayName},
+            </if>
+            <if test="item.email != null">
+                email = #{item.email},
+            </if>
+            <if test="item.mobile != null">
+                mobile = #{item.mobile},
+            </if>
+            <if test="item.status != null">
+                status = #{item.status},
+            </if>
+            update_time = NOW()
+        </set>
+        WHERE account_id = #{accountId} AND id = #{item.id}
+          AND deleted = 0
+    </update>
+
+    <update id="logicDeleteById">
+        UPDATE rbac_user
+        SET deleted = 1,
+            update_time = NOW()
+        WHERE account_id = #{accountId} AND id = #{id}
+          AND deleted = 0
+    </update>
+
+</mapper>

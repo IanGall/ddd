@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.ICustomerUserDao">
+    <resultMap id="dataMap" type="cn.iantech.infrastructure.persistent.po.CustomerUserPO">
+        <id column="id" property="id"/><result column="login_name" property="loginName"/><result column="password_hash" property="passwordHash"/>
+        <result column="display_name" property="displayName"/><result column="avatar" property="avatar"/><result column="status" property="status"/>
+        <result column="deleted" property="deleted"/><result column="password_changed_at" property="passwordChangedAt"/><result column="last_login_at" property="lastLoginAt"/><result column="create_time" property="createTime"/><result column="update_time" property="updateTime"/>
+    </resultMap>
+    <insert id="insert">
+        INSERT INTO customer_user (id,login_name,password_hash,display_name,avatar,status,deleted,password_changed_at,create_time,update_time)
+        VALUES (#{id},#{loginName},#{passwordHash},#{displayName},#{avatar},#{status},0,NOW(),NOW(),NOW())
+    </insert>
+    <select id="selectByLoginName" resultMap="dataMap">SELECT id,login_name,password_hash,display_name,avatar,status,deleted,password_changed_at,last_login_at,create_time,update_time FROM customer_user WHERE login_name=#{loginName} AND deleted=0 LIMIT 1</select>
+    <select id="selectById" resultMap="dataMap">SELECT id,login_name,password_hash,display_name,avatar,status,deleted,password_changed_at,last_login_at,create_time,update_time FROM customer_user WHERE id=#{id} AND deleted=0 LIMIT 1</select>
+    <update id="updateLastLoginAt">UPDATE customer_user SET last_login_at=NOW() WHERE id=#{id} AND deleted=0</update>
+    <update id="updatePassword">UPDATE customer_user SET password_hash=#{passwordHash},password_changed_at=NOW(),update_time=NOW() WHERE id=#{id} AND deleted=0</update>
+</mapper>

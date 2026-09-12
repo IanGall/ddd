@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.infrastructure.persistent.dao.IRbacAccountDao">
+    <resultMap id="dataMap" type="cn.iantech.infrastructure.persistent.po.RbacAccountPO">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="display_name" property="displayName"/>
+        <result column="email" property="email"/>
+        <result column="mobile" property="mobile"/>
+        <result column="status" property="status"/>
+        <result column="deleted" property="deleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="cn.iantech.infrastructure.persistent.po.RbacAccountPO">
+        INSERT INTO rbac_account (id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time)
+        VALUES (#{id}, #{username}, #{passwordHash}, #{displayName}, #{email}, #{mobile}, #{status}, 0, NOW(), NOW())
+    </insert>
+
+    <select id="selectById" resultMap="dataMap">
+        SELECT id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time
+        FROM rbac_account WHERE id = #{id} AND status = 1 AND deleted = 0 LIMIT 1
+    </select>
+
+    <select id="selectByUsername" resultMap="dataMap">
+        SELECT id, username, password_hash, display_name, email, mobile, status, deleted, create_time, update_time
+        FROM rbac_account
+        WHERE id = #{id} AND username = #{username}
+          AND status = 1 AND deleted = 0
+        LIMIT 1
+    </select>
+</mapper>
