@@ -22,6 +22,10 @@ public class CustomerUserRepository implements ICustomerUserRepository {
     public CustomerUserEntity save(CustomerUserEntity entity) {
         CustomerUserPO po = converter.convert(entity, CustomerUserPO.class);
         po.setId(globalIdGenerator.nextId());
+        // customer_user.avatar 为 NOT NULL DEFAULT ''，显式赋值避免 INSERT 绑定 null 触发约束冲突
+        if (po.getAvatar() == null) {
+            po.setAvatar("");
+        }
         dao.insert(po);
         return converter.convert(po, CustomerUserEntity.class);
     }

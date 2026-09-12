@@ -3,6 +3,8 @@ package cn.iantech.gateway.exception;
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import org.apache.dubbo.rpc.RpcException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static cn.iantech.common.constant.Constants.ResponseCode.*;
 
@@ -10,6 +12,8 @@ import static cn.iantech.common.constant.Constants.ResponseCode.*;
  * 在 RPC 适配边界统一把传输失败转换为网关错误码。
  */
 public final class GatewayRpcExceptionTranslator {
+
+    private static final Logger log = LoggerFactory.getLogger(GatewayRpcExceptionTranslator.class);
 
     private GatewayRpcExceptionTranslator() {
     }
@@ -23,6 +27,8 @@ public final class GatewayRpcExceptionTranslator {
         RpcException rpcException = findRpcException(exception);
         Constants.ResponseCode responseCode = rpcException == null
                 ? fallbackCode : responseCode(rpcException);
+        // 传输层失败的原因不能丢失，否则线上只能看到兜底错误码
+        log.warn("下游 RPC 调用失败，转换为 {}：{}", responseCode.getCode(), exception.getMessage(), exception);
         return new AppException(responseCode.getCode(), responseCode.getInfo(), exception);
     }
 

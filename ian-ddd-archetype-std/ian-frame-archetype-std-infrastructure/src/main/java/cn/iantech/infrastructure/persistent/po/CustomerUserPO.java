@@ -8,6 +8,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.time.LocalDateTime;
+
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -19,4 +21,7 @@ public class CustomerUserPO extends BasePO {
     private String displayName;
     private String avatar;
     private Boolean status;
+    // customer_user 存在的两个业务时间列，必须可映射，否则 MyBatis 查询会因缺少 setter 报错
+    private LocalDateTime passwordChangedAt;
+    private LocalDateTime lastLoginAt;
 }

@@ -215,6 +215,58 @@ public class SessionService {
         return Optional.ofNullable(sessions.get(sessionId)).map(SessionState::outcome);
     }
 
+    /**
+     * 合并若干已完成 Session 的 execution data，生成一份并集报告。
+     *
+     * <p>一次测试运行会按测试类产生多个 Session，每个 Session 只覆盖自己触达的代码路径。
+     * 单个 Session 的数字无法代表整轮测试的覆盖率，因此需要把它们的 exec 合并后再出报告。</p>
+     *
+     * @param name       合并会话名称，用于报告标识；为空时使用 merged
+     * @param sessionIds 参与合并的 Session，必须都已存在且完成
+     */
+    public synchronized ReportOutcome merge(String name, List<String> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            throw new CoverageException("合并报告至少需要一个 Session");
+        }
+        List<Path> execFiles = new ArrayList<>();
+        for (String sessionId : sessionIds) {
+            SessionState state = requireSession(sessionId);
+            if (state.outcome() == null) {
+                throw new CoverageException("Session " + sessionId + " 尚未 finish，无法参与合并");
+            }
+            addExecFile(execFiles, state.directory().resolve("overall.exec"));
+            for (CoverageProperties.Agent agent : registry.allAgents()) {
+                addExecFile(execFiles, state.directory().resolve(agent.getName() + ".exec"));
+            }
+        }
+        if (execFiles.isEmpty()) {
+            throw new CoverageException("待合并的 Session 中没有任何 *.exec 文件: " + sessionIds);
+        }
+        String mergedName = name == null || name.isBlank() ? "merged" : name;
+        String id = ID_FORMAT.format(Instant.now()) + "-" + UUID.randomUUID().toString().substring(0, 5);
+        Path directory = workDirectory.resolve("sessions").resolve(id);
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new CoverageException("创建合并报告目录失败: " + directory + " -> " + e.getMessage(), e);
+        }
+        Path merged = directory.resolve("overall.exec");
+        mergeService.merge(execFiles, merged);
+        ReportOutcome outcome = reportService.generate(directory, merged, id);
+        SessionState mergedState = new SessionState(id, mergedName, null, Instant.now(), directory);
+        mergedState.finish(outcome);
+        sessions.put(id, mergedState);
+        log.info("合并 {} 个 Session 完成，并集行覆盖率: {}%，报告: {}", sessionIds.size(),
+                outcome.overall().lineRatio(), outcome.dashboardFile());
+        return outcome;
+    }
+
+    private void addExecFile(List<Path> execFiles, Path execFile) {
+        if (Files.isRegularFile(execFile)) {
+            execFiles.add(execFile);
+        }
+    }
+
     public Path workDirectory() {
         return workDirectory;
     }

@@ -6,10 +6,11 @@ import java.util.Map;
 /**
  * 报告生成结果。
  *
+ * @param sessionId   本次报告的 Session 标识，合并报告会返回新的并集 Session
  * @param consistency 各 Agent 的 classId 一致性校验结果（Agent 名称 → 校验详情），
  *                    存在失配时说明对应类的覆盖率被误报为 0%
  */
-public record ReportOutcome(String dashboardFile, String summaryFile, String overallReportUrl,
+public record ReportOutcome(String sessionId, String dashboardFile, String summaryFile, String overallReportUrl,
                             List<CoverageSummary> services, CoverageSummary overall,
                             Map<String, ConsistencyReport> consistency) {
 

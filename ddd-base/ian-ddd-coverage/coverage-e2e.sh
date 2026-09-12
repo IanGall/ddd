@@ -70,6 +70,10 @@ STD_AGENT_PORT="${STD_AGENT_PORT:-6301}"
 COVERAGE_HOME="${COVERAGE_HOME:-${WORKSPACE_DIR}/coverage}"
 SESSIONS_DIR="${COVERAGE_HOME}/sessions"
 
+# 本轮测试新增的 Session，以及合并后的并集 Session（由 run_tests / merge_sessions 填充）
+TEST_RUN_SESSIONS=()
+merged_session=""
+
 LOG_DIR_ROOT="${TMPDIR:-/tmp}"
 LOG_DIR="${LOG_DIR_ROOT%/}/coverage-e2e"
 mkdir -p "${LOG_DIR}"
@@ -479,9 +483,17 @@ extract_json_field() {
 run_tests() {
     ensure_account || fail "无法确定管理员账号，请设置 COVERAGE_E2E_LOGIN_NAME"
 
+    # 记录测试前已存在的 Session，测试结束后把本轮新增的 Session 合并成并集报告
+    local before_listing after_listing session
+    before_listing="$(ls "${SESSIONS_DIR}" 2>/dev/null || true)"
+
     info "运行 E2E 覆盖率测试"
+    # 按命名约定跑全部 E2E 覆盖率用例：GatewayCoverageE2eTest 与 cn.iantech.gateway.e2e 下的 *E2eTest。
+    # 每个测试类各自建立 Session（beforeAll 建、afterAll 汇总），互不干扰。
+    # 注意：登录接口有 IP 风控（同一 IP 60 秒内 30 次尝试），连续重跑需间隔 60 秒以上，
+    # 否则会命中 429 AUTH_RATE_LIMITED 导致用例失败。
     (cd "${GATEWAY_DIR}" && RUN_COVERAGE_E2E=true mvn -pl gateway-app test -o \
-        -Dtest=GatewayCoverageE2eTest \
+        -Dtest='GatewayCoverageE2eTest,*E2eTest' \
         -Dcoverage.e2e.login-name="${LOGIN_NAME}" \
         -Dcoverage.e2e.login-password="${LOGIN_PASSWORD}") \
         | tee "${LOG_DIR}/test.log" \
@@ -489,6 +501,56 @@ run_tests() {
 
     echo
     sed -n '/本次测试覆盖率汇总/,/^\[INFO\]/p' "${LOG_DIR}/test.log" | head -30
+
+    after_listing="$(ls "${SESSIONS_DIR}" 2>/dev/null || true)"
+    TEST_RUN_SESSIONS=()
+    for session in ${after_listing}; do
+        if ! printf '%s\n' "${before_listing}" | grep -qx "${session}"; then
+            TEST_RUN_SESSIONS+=("${session}")
+        fi
+    done
+    if [[ ${#TEST_RUN_SESSIONS[@]} -eq 0 ]]; then
+        warn "本轮未采集到任何 Session，跳过并集报告"
+        merged_session=""
+        return 0
+    fi
+    merge_sessions
+}
+
+# 把本轮所有 Session 的 execution data 合并成一份并集报告。
+# 单类 Session 只覆盖自己触达的路径，并集才是整轮测试的真实覆盖率。
+merge_sessions() {
+    local payload json merged_id covered total ratio
+    payload="$(printf '"%s",' "${TEST_RUN_SESSIONS[@]}")"
+    payload="{\"name\":\"e2e-run\",\"sessionIds\":[${payload%,}]}"
+
+    info "合并 ${#TEST_RUN_SESSIONS[@]} 个 Session 生成并集报告"
+    json="$(curl -s -X POST "http://127.0.0.1:${CONTROLLER_PORT}/api/coverage/reports/merge" \
+        -H 'Content-Type: application/json' \
+        -d "${payload}" || true)"
+    merged_id="$(extract_json_field "${json}" sessionId)"
+    if [[ -z "${merged_id}" ]]; then
+        warn "并集报告生成失败：${json}"
+        merged_session=""
+        return 0
+    fi
+    # 用 overall 的绝对行数自行计算百分比，避免依赖派生字段的序列化形式
+    covered="$(printf '%s' "${json}" \
+        | grep -o '"overall":{[^}]*}' | grep -o '"lineCovered":[0-9]*' | head -1 | cut -d: -f2)"
+    total="$(printf '%s' "${json}" \
+        | grep -o '"overall":{[^}]*}' | grep -o '"lineTotal":[0-9]*' | head -1 | cut -d: -f2)"
+    ratio="$(awk -v c="${covered:-0}" -v t="${total:-0}" 'BEGIN { printf "%.2f", (t > 0 ? 100 * c / t : 0) }')"
+    merged_session="${merged_id}"
+    echo
+    echo "======================================================================"
+    echo " 本轮 E2E 并集覆盖率（${#TEST_RUN_SESSIONS[@]} 个 Session）"
+    echo "======================================================================"
+    echo " 并集行覆盖率   : ${ratio}%（已覆盖 ${covered:-0}/${total:-0}）"
+    echo " 并集 Session   : ${merged_id}"
+    echo "======================================================================"
+    if awk -v r="${ratio}" -v min="${COVERAGE_MIN_RATIO:-40}" 'BEGIN { exit !(r < min) }'; then
+        warn "并集行覆盖率低于目标 ${COVERAGE_MIN_RATIO:-40}%，请补充 E2E 用例（目标可用 COVERAGE_MIN_RATIO 调整）"
+    fi
 }
 
 latest_session_dir() {
@@ -497,11 +559,17 @@ latest_session_dir() {
 
 print_report() {
     local session_dir latest
-    session_dir="$(latest_session_dir || true)"
-    if [[ -z "${session_dir}" ]]; then
-        fail "还没有任何会话产物，请先执行 $0"
+    # 优先展示本轮并集报告：单类 Session 的覆盖率不代表整轮测试
+    if [[ -n "${merged_session:-}" ]]; then
+        latest="${merged_session}"
+    else
+        session_dir="$(latest_session_dir || true)"
+        if [[ -z "${session_dir}" ]]; then
+            fail "还没有任何会话产物，请先执行 $0"
+        fi
+        latest="$(basename "${session_dir}")"
     fi
-    latest="$(basename "${session_dir}")"
+    session_dir="${SESSIONS_DIR}/${latest}/"
 
     echo
     echo "======================================================================"

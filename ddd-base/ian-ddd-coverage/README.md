@@ -105,6 +105,9 @@ ddd-base/ian-ddd-coverage/coverage-e2e.sh --keep
 
 前置条件：Nacos (8848)、Redis (6379)、MySQL (3306) 已启动。
 
+> 登录接口带 IP 风控：同一 IP 60 秒内超过 30 次登录尝试会返回 `AUTH_RATE_LIMITED`。
+> 连续重跑 E2E（一轮约 20 次登录）时，两轮之间请间隔 60 秒以上。
+
 ### 手动分步执行
 
 #### 1. 启动覆盖率控制器
@@ -205,8 +208,26 @@ JaCoCo 按 `classId` 匹配 execution data 与字节码。当被测进程加载�
 | POST | `/api/coverage/sessions/{id}/reset`      | 清零探针计数，可传 `agentNames` 过滤  |
 | POST | `/api/coverage/sessions/{id}/dump`       | 采集并累加各服务 exec                 |
 | POST | `/api/coverage/sessions/{id}/finish`     | merge + 生成报告                      |
+| POST | `/api/coverage/reports/merge`            | 合并多个已完成 Session 生成并集报告   |
 | GET  | `/api/coverage/sessions/{id}/report`     | 跳转整体 HTML 报告                    |
 | GET  | `/api/coverage/sessions/{id}/reports/**` | HTML/XML/dashboard 静态资源           |
+
+## 并集报告（多测试类）
+
+`@CoversE2e` 的 Session 以测试类为单位：`beforeAll` 创建并 reset，`afterAll` 汇总。
+因此每个测试类结束时打印的覆盖率只代表该类的用例， **不代表整轮测试**。
+
+一轮测试结束后，用合并接口得到并集：
+
+```bash
+curl -X POST http://127.0.0.1:8099/api/coverage/reports/merge \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"e2e-run","sessionIds":["20260912-170837-4f066","20260912-170840-0ed5a"]}'
+```
+
+返回体与 `finish` 一致（`overall.lineRatio` 即整轮行覆盖率）。`coverage-e2e.sh`
+已自动完成这一步：`all` / `test` 命令会把本轮新增的 Session 全部合并，
+并在结尾打印「本轮 E2E 并集覆盖率」。
 
 ## 测试侧配置
 

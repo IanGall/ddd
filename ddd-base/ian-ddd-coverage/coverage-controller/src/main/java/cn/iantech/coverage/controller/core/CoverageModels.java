@@ -25,6 +25,15 @@ public final class CoverageModels {
     }
 
     /**
+     * 合并多个已完成 Session 的请求体。
+     *
+     * @param name       合并会话名称，用于报告标识
+     * @param sessionIds 参与合并的 Session，必须已 finish
+     */
+    public record MergeSessionsRequest(String name, List<String> sessionIds) {
+    }
+
+    /**
      * 单个 Agent 的采集结果。
      */
     public record AgentDumpResult(String agentName, boolean success, String execFile, String message) {

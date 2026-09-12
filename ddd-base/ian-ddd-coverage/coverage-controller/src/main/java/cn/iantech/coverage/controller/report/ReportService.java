@@ -108,7 +108,7 @@ public class ReportService {
         writeDashboard(sessionDir, dashboardFile, sessionId, serviceSummaries, overallSummary);
         Map<String, ConsistencyReport> consistency = consistencyCheckService.check(sessionDir, snapshot);
 
-        return new ReportOutcome(dashboardFile.toString(),
+        return new ReportOutcome(sessionId, dashboardFile.toString(),
                 reportsDirectory.resolve("overall.xml").toString(),
                 "/api/coverage/sessions/" + sessionId + "/reports/index.html",
                 List.copyOf(serviceSummaries),

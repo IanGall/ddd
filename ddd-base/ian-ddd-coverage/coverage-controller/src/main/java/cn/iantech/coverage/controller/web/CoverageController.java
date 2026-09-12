@@ -56,6 +56,16 @@ public class CoverageController {
     }
 
     /**
+     * 合并多个已完成 Session，生成并集报告。
+     *
+     * <p>一轮测试按测试类产生多个 Session 时，用本接口得到整轮的真实覆盖率。</p>
+     */
+    @PostMapping("/reports/merge")
+    public ReportOutcome mergeReports(@RequestBody CoverageModels.MergeSessionsRequest request) {
+        return sessionService.merge(request.name(), request.sessionIds());
+    }
+
+    /**
      * 跳转到整体 HTML 报告首页。
      */
     @GetMapping("/sessions/{id}/report")
