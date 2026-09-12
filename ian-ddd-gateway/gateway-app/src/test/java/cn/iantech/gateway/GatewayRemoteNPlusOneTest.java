@@ -9,6 +9,7 @@ import org.apache.dubbo.config.ProtocolConfig;
 import org.apache.dubbo.config.ReferenceConfig;
 import org.apache.dubbo.config.RegistryConfig;
 import org.apache.dubbo.config.ServiceConfig;
+import org.apache.dubbo.config.bootstrap.DubboBootstrap;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,8 @@ class GatewayRemoteNPlusOneTest {
         if (provider != null) {
             provider.unexport();
         }
+        // 原生 API 会注册 JVM 级默认模型，必须重置，避免后续 Spring Boot 测试上下文复用它而缺少注册中心
+        DubboBootstrap.reset();
     }
 
     @Test
