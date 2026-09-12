@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import jakarta.annotation.Resource;
 import java.math.BigDecimal;
@@ -23,6 +24,7 @@ import java.util.UUID;
  */
 @Slf4j
 @SpringBootTest
+@ActiveProfiles({"dev", "autotest"})
 @EnabledIfEnvironmentVariable(named = "RUN_DATABASE_TESTS", matches = "true")
 public class UserOrderTest {
 

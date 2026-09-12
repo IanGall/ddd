@@ -17,10 +17,12 @@
 #   ./coverage-e2e.sh unregister <服务名>            注销运行时注册的服务
 #
 # 前置条件：
-#   • Nacos(8848) / Redis(6379) / MySQL(3306) 已启动，且标准服务所需库已建好
+#   • Nacos(8848) / Redis(6379) / MySQL(3306) 已启动，且自动化测试库已建好（脚本不建库）：
+#       ddd_rbac_test（RBAC/客户/渠道）+ ian_test_tech_db_00/01（user_order 分片），见 application-autotest.yml
 #   • 环境变量 DUBBO_REGISTRY_PASSWORD 等按需注入（dev 配置有本地默认值）
 #
 # 可选环境变量：
+#   COVERAGE_SPRING_PROFILES    服务激活的 Spring profile，默认 dev,autotest（后者优先，指向测试库）
 #   COVERAGE_E2E_LOGIN_NAME      管理员登录名；不填则自动开户并缓存凭证
 #   COVERAGE_E2E_LOGIN_PASSWORD  管理员密码；不填则使用默认值
 #   COVERAGE_PLATFORM_TOKEN      平台开户令牌，默认 __REMOVED__

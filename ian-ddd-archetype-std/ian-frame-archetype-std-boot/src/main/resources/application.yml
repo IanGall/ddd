@@ -3,6 +3,8 @@ spring:
     name: ian-frame-archetype-std-boot
   profiles:
     active: dev
+    # 自动化测试请按「dev,autotest」顺序激活（见 application-autotest.yml）：
+    # 多个 profile 同时激活时后者优先，autotest 放最后才能覆盖 dev 的 MySQL/Redis 为测试库。
 
 dubbo:
   application:

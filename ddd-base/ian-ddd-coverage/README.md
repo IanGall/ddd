@@ -147,9 +147,25 @@ ddd-base/ian-ddd-coverage/coverage-e2e.sh --keep
 | `coverage-e2e.sh stop`   | 停止全部服务                         |
 
 可用环境变量：`COVERAGE_E2E_LOGIN_NAME` / `COVERAGE_E2E_LOGIN_PASSWORD`（不填则自动开户并缓存凭证）、
-`COVERAGE_SKIP_BUILD=1`（跳过构建快速重跑）、`WORKSPACE_DIR`（覆盖工作区根目录探测）。
+`COVERAGE_SKIP_BUILD=1`（跳过构建快速重跑）、`WORKSPACE_DIR`（覆盖工作区根目录探测）、
+`COVERAGE_SPRING_PROFILES`（默认 `dev,autotest`，见下）。
 
-前置条件：Nacos (8848)、Redis (6379)、MySQL (3306) 已启动。
+前置条件：Nacos (8848)、Redis (6379)、MySQL (3306) 已启动，且**自动化测试库已建好**（脚本不做建库）。
+
+服务以 `dev,autotest` 两个 Spring profile 启动（后者优先）：业务配置沿用 dev，但 MySQL/Redis 全部指向
+自动化测试库，dev 库不会被 E2E 写入。对照关系与建库清单见 `application-autotest.yml`：
+
+| 用途                          | 数据库                     |
+|-------------------------------|----------------------------|
+| RBAC / 客户 / 渠道（`ds_rbac`） | `ddd_rbac_test`            |
+| user_order 分片                | `ian_test_tech_db_00/01`   |
+| Redis                          | db 1（dev 为 db 0）        |
+
+一次性初始化（建库 + 建表 + 样例数据）：`ddd_rbac_test` 用 `ian-frame-archetype-std-boot/src/test/resources/sql/schema-rbac-mysql.sql`；
+两个分片库用 `ian-ddd-archetype-std/docs/dev-ops/environment/sql/ian_dev_tech_db_0{0,1}.sql`（把库名中的
+`ian_dev` 换成 `ian_test` 后执行）。E2E 会自行开户，不依赖库内种子数据。
+
+> `autotest` 必须放在 profile 列表最后（`dev,autotest`）才能覆盖 dev 的库地址：多个 profile 同时激活时后者优先。
 
 > 登录接口带 IP 风控：同一 IP 60 秒内超过 30 次登录尝试会返回 `AUTH_RATE_LIMITED`。
 > 连续重跑 E2E（一轮约 20 次登录）时，两轮之间请间隔 60 秒以上。

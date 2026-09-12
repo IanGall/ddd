@@ -102,6 +102,21 @@ mvn -B -f ian-ddd-archetype-std/pom.xml clean verify
 
 标准服务还要求 Redis（会话、登录风控、防重放），连接信息通过 `DB_*`、`REDIS_*`、`DUBBO_REGISTRY_*` 环境变量注入。
 
+### 自动化测试专用库
+
+E2E 覆盖率流水线（`coverage-e2e.sh`）与依赖真实中间件的测试统一以 `dev,autotest` 两个 Profile 启动，
+`autotest`（`ian-frame-archetype-std-boot/src/main/resources/application-autotest.yml`）把 MySQL/Redis 指向测试库，
+dev 库不会被测试写入：
+
+| 用途                            | dev 库                     | 测试库（autotest）          |
+|---------------------------------|----------------------------|-----------------------------|
+| RBAC / 客户 / 渠道（`ds_rbac`） | `ddd_rbac`                 | `ddd_rbac_test`             |
+| user_order 分片                 | `ian_dev_tech_db_00/01`    | `ian_test_tech_db_00/01`    |
+| Redis                           | db 0                       | db 1                        |
+
+建库方式：`ddd_rbac_test` 用 `ian-frame-archetype-std-boot/src/test/resources/sql/schema-rbac-mysql.sql`；
+两个分片库用上表的 `ian_dev_tech_db_0{0,1}.sql` 并把库名 `ian_dev` 换成 `ian_test`。
+
 ### 2. 启动标准服务
 
 在 `ian-ddd-archetype-std` 目录执行（`dev` Profile 使用本地明文平台令牌 `__REMOVED__`，生产必须注入）：

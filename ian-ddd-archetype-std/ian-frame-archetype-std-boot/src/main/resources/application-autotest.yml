@@ -1,0 +1,20 @@
+# 自动化测试专用配置：MySQL 与 Redis 全部指向测试库，供 E2E 覆盖率流水线与依赖真实中间件的测试使用。
+#
+# 激活方式：
+#   - E2E：start-with-coverage.sh 默认以 autotest 启动（COVERAGE_SPRING_PROFILES 可覆盖）
+#   - 测试：@ActiveProfiles("autotest")
+#
+# 其余配置（Nacos / Kafka / Dubbo / 渠道密钥 / 平台开户令牌等）通过
+# application.yml 的 spring.profiles.group.autotest 继承 dev，仅在此覆盖需要隔离的部分。
+#
+# 物理库对照（dev → autotest）：
+#   ddd_rbac              → ddd_rbac_test        （ds_rbac，!SINGLE）
+#   ian_dev_tech_db_00/01 → ian_test_tech_db_00/01（user_order 分片）
+#   Redis db 0            → Redis db 1
+spring:
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:sharding/sharding-jdbc-autotest.yaml
+  data:
+    redis:
+      database: 1

@@ -6,12 +6,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Redis 案例；<a href="https://iantech.cn/md/road-map/redis.html">Redis</a>
  */
 @Slf4j
 @SpringBootTest
+@ActiveProfiles({"dev", "autotest"})
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_TESTS", matches = "true")
 public class RedisTest {
 
