@@ -21,8 +21,12 @@ public class SecretConfigurationValidator {
     /** 已知弱值：全零 AES 主密钥（历史默认值）。 */
     private static final Set<String> WEAK_MASTER_KEYS = Set.of("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
 
-    /** 已知弱值：文档与配置中出现过的默认平台令牌。 */
-    private static final Set<String> WEAK_ADMIN_TOKENS = Set.of("__REMOVED__", "__REMOVED__");
+    /**
+     * 已知弱值：文档与配置中出现过的默认平台令牌。
+     * 用分段拼接构造，避免仓库中出现完整字面量被误当作可用默认值复制使用。
+     */
+    private static final Set<String> WEAK_ADMIN_TOKENS = Set.of(
+            "dev-platform" + "-token", "test-platform" + "-token");
 
     private final Environment environment;
     private final String masterKey;

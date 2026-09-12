@@ -3,7 +3,8 @@ server:
 
 platform:
   security:
-    admin-token: __REMOVED__
+    # 单测专用值（不连接外部中间件、不用于任何真实环境）
+    admin-token: test-only-token
 
 channel:
   security:

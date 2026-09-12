@@ -26,7 +26,7 @@ channel:
 
 platform:
   security:
-    admin-token: __REMOVED__
+    admin-token: test-only-token
 
 mybatis:
   mapper-locations: classpath:/mybatis/mapper/*.xml
