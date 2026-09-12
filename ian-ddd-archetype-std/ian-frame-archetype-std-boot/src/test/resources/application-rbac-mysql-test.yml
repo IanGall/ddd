@@ -17,12 +17,31 @@ spring:
 kafka:
   enabled: false
 
+# 测试专用占位值：仅为让渠道加密与平台开户相关 Bean 完成装配，不参与真实加解密链路。
+channel:
+  security:
+    encryption:
+      key-id: test-key-v1
+      master-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
+platform:
+  security:
+    admin-token: __REMOVED__
+
 mybatis:
   mapper-locations: classpath:/mybatis/mapper/*.xml
-  config-location: classpath:/mybatis/config/mybatis-config.xml
+  # 与 application-dev.yml 保持一致；此前指向不存在的 mybatis-config.xml 会导致上下文启动失败
+  configuration:
+    map-underscore-to-camel-case: true
 
 dubbo:
-  enabled: false
+  # 测试不需要对外暴露 RPC：不注册、不监听端口，只为 @EnableDubbo 提供 tri 协议配置。
+  registry:
+    address: N/A
+  protocol:
+    id: tri
+    name: tri
+    port: -1
 
 xxl:
   job:

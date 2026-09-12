@@ -33,7 +33,7 @@ public abstract class RbacMysqlTestSupport {
     void initMarker() {
         marker = System.currentTimeMillis() + "_" + ThreadLocalRandom.current().nextInt(1000, 10000);
         contextScope = ContextAccessor.open(new RequestContext(
-                "mysql-test-" + marker, "test-admin", "1", "1", null, null, null, "gateway", null,
+                "mysql-test-" + marker, "test-admin", "1", "1", "ADMIN_PRIMARY", null, null, "gateway", null,
                 null, null, null));
     }
 
@@ -88,8 +88,8 @@ public abstract class RbacMysqlTestSupport {
     protected void switchActor(Long accountId, Long userId, String principalName) {
         contextScope.close();
         contextScope = ContextAccessor.open(new RequestContext(
-                "mysql-test-" + marker, principalName, accountId.toString(), userId.toString(), null, null, null,
-                "gateway", null, null, null, null));
+                "mysql-test-" + marker, principalName, accountId.toString(), userId.toString(), "ADMIN_PRIMARY",
+                null, null, "gateway", null, null, null, null));
     }
 
     protected void switchActor(Long accountId, String principalName) {

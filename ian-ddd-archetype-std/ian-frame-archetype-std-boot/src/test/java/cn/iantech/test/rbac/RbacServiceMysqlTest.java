@@ -10,12 +10,14 @@ import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.auth.service.IAdminIdentityAuthenticator;
 import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.redis.IRedisService;
 import cn.iantech.trigger.context.ActorResolver;
 import cn.iantech.trigger.convertor.RbacCommandConvertor;
 import cn.iantech.trigger.rpc.RbacService;
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor;
 import io.github.linpeilie.Converter;
 import jakarta.annotation.Resource;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -40,9 +42,6 @@ import java.util.stream.IntStream;
 @EnabledIfEnvironmentVariable(named = "RUN_RBAC_MYSQL_TESTS", matches = "true")
 @Import(RbacServiceMysqlTest.RbacServiceTestConfiguration.class)
 public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
-
-    @MockitoBean(name = "redissonClient")
-    private RedissonClient redissonClient;
 
     @MockitoBean(name = "xxlJobExecutor")
     private XxlJobSpringExecutor xxlJobSpringExecutor;
@@ -440,6 +439,25 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
         public GlobalIdGenerator globalIdGenerator() {
             AtomicLong sequence = new AtomicLong(1_000_000L);
             return sequence::incrementAndGet;
+        }
+
+        /**
+         * 用例不依赖真实 Redis，但 Redis starter 的 @ConditionalOnBean 只能看到普通 Bean 定义，
+         * @MockitoBean 注册的替身对它不可见，因此这里显式声明替身。
+         */
+        @Bean
+        @Primary
+        public RedissonClient redissonClient() {
+            return Mockito.mock(RedissonClient.class);
+        }
+
+        @Bean
+        @Primary
+        public IRedisService redisService() {
+            IRedisService redisService = Mockito.mock(IRedisService.class);
+            Mockito.when(redisService.executeLongScript(Mockito.anyString(), Mockito.anyList(), Mockito.anyList()))
+                    .thenReturn(1L);
+            return redisService;
         }
 
         @Bean
