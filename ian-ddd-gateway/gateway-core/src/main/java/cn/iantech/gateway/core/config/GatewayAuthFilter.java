@@ -1,4 +1,4 @@
-package cn.iantech.gateway.config;
+package cn.iantech.gateway.core.config;
 
 import cn.iantech.api.model.auth.AuthIdentityDTO;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
@@ -9,15 +9,12 @@ import cn.iantech.context.core.ContextAccessor;
 import cn.iantech.context.core.ContextScope;
 import cn.iantech.context.core.ContextValidator;
 import cn.iantech.context.core.RequestContext;
-import cn.iantech.gateway.service.GatewayAuthClient;
+import cn.iantech.gateway.core.service.GatewayAuthClient;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.ModelAndView;
@@ -28,9 +25,10 @@ import java.util.UUID;
 
 /**
  * 按固定 API 分区选择认证机制，校验可信主体并建立请求上下文。
+ *
+ * <p>由 {@code GatewayCoreAutoConfiguration} 以 Bean 形式注册（过滤器顺序在注册器中指定），
+ * 不依赖组件扫描，因此对任意包名的接入工程都生效。</p>
  */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 100)
 public class GatewayAuthFilter extends OncePerRequestFilter {
 
     public static final String IDENTITY_ATTRIBUTE = GatewayAuthFilter.class.getName() + ".identity";

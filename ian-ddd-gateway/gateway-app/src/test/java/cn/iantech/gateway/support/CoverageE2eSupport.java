@@ -36,10 +36,18 @@ public final class CoverageE2eSupport {
     private static final String BASE_URL = System.getProperty("gateway.base-url", "http://127.0.0.1:8092");
 
     /**
-     * 平台开户令牌，与 coverage-e2e.sh 的默认值一致。
+     * 平台开户令牌：优先取系统属性 coverage.e2e.platform-token，其次取环境变量 COVERAGE_PLATFORM_TOKEN。
+     * 不内置默认值，由 coverage-e2e.sh 在运行测试时显式注入（与标准服务 PLATFORM_ADMIN_TOKEN 一致）。
      */
-    private static final String PLATFORM_TOKEN =
-            System.getProperty("coverage.e2e.platform-token", "__REMOVED__");
+    private static final String PLATFORM_TOKEN = resolvePlatformToken();
+
+    private static String resolvePlatformToken() {
+        String token = System.getProperty("coverage.e2e.platform-token");
+        if (token == null || token.isBlank()) {
+            token = System.getenv("COVERAGE_PLATFORM_TOKEN");
+        }
+        return token == null ? "" : token;
+    }
 
     private CoverageE2eSupport() {
     }

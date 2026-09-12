@@ -5,7 +5,7 @@ import cn.iantech.api.model.auth.AuthRefreshReq;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.api.model.auth.AuthTokenDTO;
 import cn.iantech.common.exception.AppException;
-import cn.iantech.gateway.config.GatewayAuthFilter;
+import cn.iantech.gateway.core.config.GatewayAuthFilter;
 import cn.iantech.gateway.model.AuthWebModels;
 import jakarta.servlet.http.HttpServletRequest;
 

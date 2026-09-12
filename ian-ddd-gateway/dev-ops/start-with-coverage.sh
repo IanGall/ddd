@@ -8,6 +8,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# 加载仓库根目录的 .env.local（本地开发凭证，不入库；模板见仓库根 .env.example）。
+# 生产环境由部署平台注入同名环境变量，不依赖本文件。
+load_local_env() {
+  local probe="${SCRIPT_DIR}" i=0
+  while (( i < 8 )); do
+    if [[ -f "${probe}/.env.local" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      . "${probe}/.env.local"
+      set +a
+      return 0
+    fi
+    probe="$(dirname "${probe}")"
+    (( i++ )) || true
+  done
+  return 1
+}
+load_local_env || echo "[提示] 未找到仓库根的 .env.local，凭证直接读取当前环境变量（模板见 .env.example）" >&2
+
 # Agent 唯一标识，需与 coverage-controller 配置的 coverage.agents[].name 一致
 COVERAGE_AGENT_NAME="${COVERAGE_AGENT_NAME:-gateway}"
 # Agent 监听端口，约定 gateway 使用 6300，其余服务依次递增

@@ -1,11 +1,11 @@
-package cn.iantech.gateway.config;
+package cn.iantech.gateway.core.config;
 
 import cn.iantech.api.model.auth.AuthIdentityDTO;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.context.core.ContextAccessor;
 import cn.iantech.context.core.RequestContext;
-import cn.iantech.gateway.service.GatewayAuthClient;
+import cn.iantech.gateway.core.service.GatewayAuthClient;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;

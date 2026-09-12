@@ -1,4 +1,4 @@
-package cn.iantech.gateway.exception;
+package cn.iantech.gateway.core.exception;
 
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;

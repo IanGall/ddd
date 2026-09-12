@@ -1,3 +1,4 @@
+# 必须由环境变量注入；本地开发使用仓库根 .env.local（模板见 .env.example），生产由部署平台注入。
 dubbo:
   consumer:
     parameters:
@@ -5,6 +6,6 @@ dubbo:
   registry:
     address: ${DUBBO_REGISTRY_ADDRESS:nacos://127.0.0.1:8848}
     username: ${DUBBO_REGISTRY_USERNAME:nacos}
-    password: ${DUBBO_REGISTRY_PASSWORD:__REMOVED__}
+    password: ${DUBBO_REGISTRY_PASSWORD}
     use-as-config-center: false
     use-as-metadata-center: true

@@ -1,9 +1,9 @@
-package cn.iantech.gateway.exception;
+package cn.iantech.gateway.core.exception;
 
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.common.model.Response;
-import cn.iantech.gateway.config.ChannelCanonicalRequest;
+import cn.iantech.gateway.core.config.ChannelCanonicalRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

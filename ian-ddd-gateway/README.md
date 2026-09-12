@@ -11,7 +11,8 @@ ian-ddd-gateway/
 
 ### 启动前准备
 
-所有环境必须通过环境变量注入注册中心凭据：
+所有环境必须通过环境变量注入注册中心凭据（本地开发统一放在仓库根 `.env.local`，模板见 `.env.example`；
+`dev-ops/start-with-coverage.sh` 会自动加载）：
 
 ```bash
 export DUBBO_REGISTRY_ADDRESS='nacos://127.0.0.1:8848'

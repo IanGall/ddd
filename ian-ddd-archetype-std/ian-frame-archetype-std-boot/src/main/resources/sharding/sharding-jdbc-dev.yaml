@@ -1,4 +1,7 @@
 # https://shardingsphere.apache.org/index_zh.html
+#
+# 数据源账号/密码使用 $${VAR::默认值} 占位符，由 JDBC URL 的 ?placeholder-type=environment 触发环境变量渲染。
+# 本地开发在仓库根 .env.local 提供 MYSQL_USERNAME / MYSQL_PASSWORD（模板见 .env.example）；生产由部署平台注入。
 mode:
   # 运行模式类型。可选配置：内存模式 Memory、单机模式 Standalone、集群模式 Cluster - 目前为单机模式
   type: Standalone
@@ -8,8 +11,8 @@ dataSources:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
     jdbcUrl: jdbc:mysql://127.0.0.1:3306/ian_dev_tech_db_00?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: root
-    password: __REMOVED__
+    username: "$${MYSQL_USERNAME::root}"
+    password: "$${MYSQL_PASSWORD::}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000
@@ -20,8 +23,8 @@ dataSources:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
     jdbcUrl: jdbc:mysql://127.0.0.1:3306/ian_dev_tech_db_01?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: root
-    password: __REMOVED__
+    username: "$${MYSQL_USERNAME::root}"
+    password: "$${MYSQL_PASSWORD::}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000
@@ -32,8 +35,8 @@ dataSources:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
     jdbcUrl: jdbc:mysql://127.0.0.1:3306/ddd_rbac?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: root
-    password: __REMOVED__
+    username: "$${MYSQL_USERNAME::root}"
+    password: "$${MYSQL_PASSWORD::}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000

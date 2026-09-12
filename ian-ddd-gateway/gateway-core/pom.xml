@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.iantech</groupId>
+        <artifactId>ian-ddd-gateway-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ian-ddd-gateway-core</artifactId>
+    <name>ian-ddd-gateway-core</name>
+    <description>网关核心组件：认证过滤器、Auth RPC 适配、统一异常处理，被 gateway-app 与骨架工程共同复用</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ian-frame-archetype-std-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ddd-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ddd-context-dubbo</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>coverage-junit-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

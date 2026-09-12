@@ -5,9 +5,18 @@ on:
     branches: [ '**' ]
   pull_request:
 
+# 同一分支的新提交取消进行中的旧构建，避免重复消耗
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 

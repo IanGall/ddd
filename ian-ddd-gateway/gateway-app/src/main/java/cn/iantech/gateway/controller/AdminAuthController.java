@@ -5,7 +5,7 @@ import cn.iantech.api.model.auth.AuthSessionDTO;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.common.model.Response;
 import cn.iantech.gateway.model.AuthWebModels;
-import cn.iantech.gateway.service.GatewayAuthClient;
+import cn.iantech.gateway.core.service.GatewayAuthClient;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;

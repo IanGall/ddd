@@ -1,10 +1,10 @@
-package cn.iantech.gateway.exception;
+package cn.iantech.gateway.core.exception;
 
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.common.model.Response;
-import cn.iantech.gateway.config.CachedBodyHttpServletRequest;
-import cn.iantech.gateway.config.ChannelCanonicalRequest;
+import cn.iantech.gateway.core.config.CachedBodyHttpServletRequest;
+import cn.iantech.gateway.core.config.ChannelCanonicalRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

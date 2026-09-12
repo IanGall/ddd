@@ -100,7 +100,8 @@ mvn -B -f ian-ddd-archetype-std/pom.xml clean verify
 | `channel-credential.sql`               | 渠道凭证数据                     |
 | `xxl_job.sql`                          | XXL-Job 调度库                   |
 
-标准服务还要求 Redis（会话、登录风控、防重放），连接信息通过 `DB_*`、`REDIS_*`、`DUBBO_REGISTRY_*` 环境变量注入。
+标准服务还要求 Redis（会话、登录风控、防重放），连接信息通过 `MYSQL_*`、`REDIS_*`、`DUBBO_REGISTRY_*`
+环境变量注入；本地开发统一放在仓库根 `.env.local`（不入库，模板 `.env.example`，启动脚本会自动加载）。
 
 ### 自动化测试专用库
 
@@ -119,25 +120,31 @@ dev 库不会被测试写入：
 
 ### 2. 启动标准服务
 
-在 `ian-ddd-archetype-std` 目录执行（`dev` Profile 使用本地明文平台令牌 `__REMOVED__`，生产必须注入）：
+本地开发凭证统一放在仓库根 `.env.local`（不入库，模板 `.env.example`；启动脚本自动加载），首次准备：
 
 ```bash
-export PLATFORM_ADMIN_TOKEN='生产环境高强度令牌'
-export DB_USERNAME='root'
-export DB_PASSWORD='本地数据库密码'
-export REDIS_PASSWORD='本地 Redis 密码'
-export DUBBO_REGISTRY_PASSWORD='Nacos 密码'
+cp .env.example .env.local
+# 至少填写：MYSQL_PASSWORD / REDIS_PASSWORD / DUBBO_REGISTRY_PASSWORD /
+#           CHANNEL_ENCRYPTION_MASTER_KEY / PLATFORM_ADMIN_TOKEN
+```
+
+在 `ian-ddd-archetype-std` 目录执行：
+
+```bash
 mvn -q spring-boot:run -pl ian-frame-archetype-std-boot -Pdev
 ```
 
+生产环境不使用 `.env.local`：由部署平台注入同名环境变量（`SPRING_PROFILES_ACTIVE=prod` 已由 Dockerfile 固定，
+非本地 Profile 使用示例令牌或全零渠道密钥会被启动校验直接拒绝）。
+
 ### 3. 启动网关
 
-在 `ddd` 仓库根目录执行：
+在 `ddd` 仓库根目录执行（凭证同样从 `.env.local` / 环境变量读取）：
 
 ```bash
 export DUBBO_REGISTRY_ADDRESS='nacos://127.0.0.1:8848'
 export DUBBO_REGISTRY_USERNAME='nacos-user'
-export DUBBO_REGISTRY_PASSWORD='从密钥管理系统读取'
+export DUBBO_REGISTRY_PASSWORD='本地 Nacos 密码'
 mvn -q -f ian-ddd-gateway/gateway-app/pom.xml spring-boot:run
 ```
 

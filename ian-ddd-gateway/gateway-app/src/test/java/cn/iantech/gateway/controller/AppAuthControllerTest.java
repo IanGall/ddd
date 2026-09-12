@@ -6,7 +6,7 @@ import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.api.model.auth.AuthTokenDTO;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.gateway.model.AuthWebModels;
-import cn.iantech.gateway.service.GatewayAuthClient;
+import cn.iantech.gateway.core.service.GatewayAuthClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockHttpServletRequest;

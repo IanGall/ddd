@@ -53,20 +53,26 @@
 
 ## 本地启动
 
-标准服务 Provider 在 `dev` Profile 使用本地明文令牌 `__REMOVED__`，生产环境必须注入平台开户凭据和基础设施凭据：
+本地开发凭证统一放在仓库根 `.env.local`（已被 `.gitignore` 忽略），模板见仓库根 `.env.example`：
 
 ```bash
-export PLATFORM_ADMIN_TOKEN='生产环境高强度令牌'
-export DB_USERNAME='root'
-export DB_PASSWORD='本地数据库密码'
-export REDIS_PASSWORD='本地 Redis 密码'
-export DUBBO_REGISTRY_PASSWORD='Nacos 密码'
+# 首次准备（在仓库根目录执行）
+cp .env.example .env.local
+# 编辑 .env.local：至少填写 MYSQL_PASSWORD / REDIS_PASSWORD / DUBBO_REGISTRY_PASSWORD /
+# CHANNEL_ENCRYPTION_MASTER_KEY / PLATFORM_ADMIN_TOKEN
+
+# 启动：docs/dev-ops/start-with-coverage.sh 与容器脚本会自动加载 .env.local
 mvn -q spring-boot:run -pl ian-frame-archetype-std-boot -Pdev
 ```
 
-IntelliJ 使用 `dev` Profile 时可以直接启动；调用本地平台开户接口时使用
-`X-Platform-Token: __REMOVED__`。生产启动时，将上述变量配置到 Run/Debug Configuration 或部署 Secret 中；缺少
-`PLATFORM_ADMIN_TOKEN` 时 Provider 会明确失败。
+- 数据库账号/口令通过 ShardingSphere 占位符 `$${MYSQL_USERNAME::root}` / `$${MYSQL_PASSWORD::}` 注入
+  （JDBC URL 带 `?placeholder-type=environment`）；Redis、Nacos、渠道主密钥、平台令牌通过 Spring
+  `${ENV}` 占位符注入，配置文件中不保留任何可用默认值。
+- IntelliJ 直跑时请在 Run/Debug Configuration 的 Environment variables 中导入 `.env.local` 内容（或选择
+  EnvFile 插件）；启动脚本场景无需手工导出。
+- 调用本地平台开户接口时使用 `X-Platform-Token`（值取自 `.env.local` 的 `PLATFORM_ADMIN_TOKEN`）。
+- 生产环境不使用 `.env.local`：由部署平台注入同名环境变量，`SPRING_PROFILES_ACTIVE=prod` 已由 Dockerfile 固定；
+  非本地 Profile 使用示例令牌或全零渠道密钥会被启动校验（`SecretConfigurationValidator`）直接拒绝。
 
 ## 覆盖率
 

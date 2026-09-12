@@ -1,4 +1,4 @@
-package cn.iantech.gateway.service;
+package cn.iantech.gateway.core.service;
 
 import cn.iantech.api.IAuthService;
 import cn.iantech.api.model.channel.ChannelSignatureVerifyReq;

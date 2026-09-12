@@ -19,13 +19,14 @@
 # 前置条件：
 #   • Nacos(8848) / Redis(6379) / MySQL(3306) 已启动，且自动化测试库已建好（脚本不建库）：
 #       ddd_rbac_test（RBAC/客户/渠道）+ ian_test_tech_db_00/01（user_order 分片），见 application-autotest.yml
-#   • 环境变量 DUBBO_REGISTRY_PASSWORD 等按需注入（dev 配置有本地默认值）
+#   • 凭证（MySQL/Redis/Nacos 口令、渠道主密钥、平台开户令牌）从仓库根 .env.local 读取
+#     （模板见仓库根 .env.example），或直接以环境变量注入
 #
 # 可选环境变量：
 #   COVERAGE_SPRING_PROFILES    服务激活的 Spring profile，默认 dev,autotest（后者优先，指向测试库）
 #   COVERAGE_E2E_LOGIN_NAME      管理员登录名；不填则自动开户并缓存凭证
-#   COVERAGE_E2E_LOGIN_PASSWORD  管理员密码；不填则使用默认值
-#   COVERAGE_PLATFORM_TOKEN      平台开户令牌，默认 __REMOVED__
+#   COVERAGE_E2E_LOGIN_PASSWORD  管理员密码；不填则读取 .env.local 的同名变量
+#   COVERAGE_PLATFORM_TOKEN      平台开户令牌；与标准服务 PLATFORM_ADMIN_TOKEN 一致，不填则读取 .env.local
 #   COVERAGE_SKIP_BUILD          设为 1 跳过 clean 构建（快速重跑）
 #   WORKSPACE_DIR                覆盖工作区根目录探测结果
 #   EXTRA_SERVICES               追加启动的业务服务，逗号分隔，每项格式：
@@ -36,6 +37,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COVERAGE_DIR="${SCRIPT_DIR}"                              # <workspace>/ddd-base/ian-ddd-coverage
+
+# 加载仓库根（ddd/）的 .env.local：本地开发凭证统一从该文件读取，不入库（模板见仓库根 .env.example）。
+# 生产/CI 环境直接以环境变量注入，不依赖该文件。
+load_local_env() {
+    local probe="${SCRIPT_DIR}" i=0
+    while (( i < 8 )); do
+        if [[ -f "${probe}/.env.local" ]]; then
+            set -a
+            # shellcheck disable=SC1091
+            . "${probe}/.env.local"
+            set +a
+            return 0
+        fi
+        probe="$(dirname "${probe}")"
+        (( i++ )) || true
+    done
+    return 1
+}
+load_local_env || echo "[e2e] 未找到仓库根的 .env.local，凭证直接读取当前环境变量（模板见 .env.example）" >&2
 
 # JaCoCo 版本唯一来源：仓库根目录的 .mvn/jacoco-version（与 ddd-base/pom.xml 的 jacoco.version 保持一致）。
 # 脚本不再硬编码版本号，避免升级时漏改导致 Agent 与报告解析版本不一致（表现为覆盖率静默为 0）。
@@ -107,8 +127,9 @@ mkdir -p "${LOG_DIR}"
 ACCOUNT_STATE_FILE="${LOG_DIR}/account.env"
 
 DEFAULT_ACCOUNT_NAME="${COVERAGE_E2E_ACCOUNT_NAME:-coverage_admin}"
-DEFAULT_ACCOUNT_PASSWORD="${COVERAGE_E2E_LOGIN_PASSWORD:-__REMOVED__}"
-PLATFORM_TOKEN="${COVERAGE_PLATFORM_TOKEN:-__REMOVED__}"
+# 测试账号密码与平台开户令牌必须显式提供（仓库根 .env.local 或环境变量），不再内置默认值。
+DEFAULT_ACCOUNT_PASSWORD="${COVERAGE_E2E_LOGIN_PASSWORD:-}"
+PLATFORM_TOKEN="${COVERAGE_PLATFORM_TOKEN:-}"
 
 KEEP_RUNNING=0
 COMMAND="all"
@@ -449,6 +470,7 @@ ensure_account() {
     if [[ -n "${COVERAGE_E2E_LOGIN_NAME:-}" ]]; then
         LOGIN_NAME="${COVERAGE_E2E_LOGIN_NAME}"
         LOGIN_PASSWORD="${COVERAGE_E2E_LOGIN_PASSWORD:-${DEFAULT_ACCOUNT_PASSWORD}}"
+        [[ -n "${LOGIN_PASSWORD}" ]] || fail "未提供登录密码：请设置 COVERAGE_E2E_LOGIN_PASSWORD（可写入仓库根 .env.local，模板见 .env.example）"
         login_ok "${LOGIN_NAME}" "${LOGIN_PASSWORD}" \
             || fail "提供的账号无法登录：${LOGIN_NAME}"
         info "使用环境变量提供的管理员账号：${LOGIN_NAME}"
@@ -467,6 +489,8 @@ ensure_account() {
     fi
 
     # 3) 开户：接口返回的 loginName 形如「用户名@accountId.com」，必须完整使用
+    [[ -n "${PLATFORM_TOKEN}" ]] || fail "未提供平台开户令牌：请设置 COVERAGE_PLATFORM_TOKEN（与标准服务 PLATFORM_ADMIN_TOKEN 一致，可写入仓库根 .env.local）"
+    [[ -n "${DEFAULT_ACCOUNT_PASSWORD}" ]] || fail "未提供开户密码：请设置 COVERAGE_E2E_LOGIN_PASSWORD（可写入仓库根 .env.local，模板见 .env.example）"
     local response
     response="$(curl -s -X POST "http://127.0.0.1:${GATEWAY_PORT}/api/admin/platform/accounts" \
         -H 'Content-Type: application/json' \
@@ -520,7 +544,9 @@ run_tests() {
     (cd "${GATEWAY_DIR}" && RUN_COVERAGE_E2E=true mvn -pl gateway-app test -o \
         -Dtest='GatewayCoverageE2eTest,*E2eTest' \
         -Dcoverage.e2e.login-name="${LOGIN_NAME}" \
-        -Dcoverage.e2e.login-password="${LOGIN_PASSWORD}") \
+        -Dcoverage.e2e.login-password="${LOGIN_PASSWORD}" \
+        -Dcoverage.e2e.platform-token="${PLATFORM_TOKEN}" \
+        -Dgateway.base-url="http://127.0.0.1:${GATEWAY_PORT}") \
         | tee "${LOG_DIR}/test.log" \
         || fail "测试失败，完整日志：${LOG_DIR}/test.log"
 

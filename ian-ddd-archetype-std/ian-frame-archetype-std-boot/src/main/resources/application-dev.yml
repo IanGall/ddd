@@ -5,12 +5,12 @@ channel:
   security:
     encryption:
       key-id: ${CHANNEL_ENCRYPTION_KEY_ID:dev-key-v1}
-      master-key: ${CHANNEL_ENCRYPTION_MASTER_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      master-key: ${CHANNEL_ENCRYPTION_MASTER_KEY}
 
-# 仅本地 dev 使用明文默认值；生产环境必须通过 PLATFORM_ADMIN_TOKEN 注入。
+# 必须由环境变量注入；本地开发使用仓库根 .env.local（模板见 .env.example），生产由部署平台注入。
 platform:
   security:
-    admin-token: ${PLATFORM_ADMIN_TOKEN:__REMOVED__}
+    admin-token: ${PLATFORM_ADMIN_TOKEN}
 
 # 数据库配置 - sharding-jdbc 分库分表
 spring:
@@ -18,11 +18,12 @@ spring:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:__REMOVED__}
+      password: ${REDIS_PASSWORD}
       database: ${REDIS_DATABASE:0}
   datasource:
     driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
-    url: jdbc:shardingsphere:classpath:sharding/sharding-jdbc-dev.yaml
+    # placeholder-type=environment：ShardingSphere 按环境变量渲染 YAML 中的 $${VAR::默认值} 占位符
+    url: jdbc:shardingsphere:classpath:sharding/sharding-jdbc-dev.yaml?placeholder-type=environment
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
     producer:
@@ -50,7 +51,7 @@ dubbo:
     id: nacos-registry
     address: ${DUBBO_REGISTRY_ADDRESS:nacos://127.0.0.1:8848}
     username: ${DUBBO_REGISTRY_USERNAME:nacos}
-    password: ${DUBBO_REGISTRY_PASSWORD:__REMOVED__}
+    password: ${DUBBO_REGISTRY_PASSWORD}
     parameters:
       enable-empty-protection: true
   protocol:

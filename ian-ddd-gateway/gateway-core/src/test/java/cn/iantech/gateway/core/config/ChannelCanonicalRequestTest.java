@@ -1,4 +1,4 @@
-package cn.iantech.gateway.config;
+package cn.iantech.gateway.core.config;
 
 import cn.iantech.common.exception.AppException;
 import org.junit.jupiter.api.Test;

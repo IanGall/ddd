@@ -43,6 +43,10 @@
         </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>
+            <artifactId>ian-ddd-gateway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iantech</groupId>
             <artifactId>ian-frame-archetype-std-api</artifactId>
         </dependency>
         <dependency>

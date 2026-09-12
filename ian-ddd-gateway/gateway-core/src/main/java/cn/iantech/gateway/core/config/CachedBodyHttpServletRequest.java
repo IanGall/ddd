@@ -1,4 +1,4 @@
-package cn.iantech.gateway.config;
+package cn.iantech.gateway.core.config;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;

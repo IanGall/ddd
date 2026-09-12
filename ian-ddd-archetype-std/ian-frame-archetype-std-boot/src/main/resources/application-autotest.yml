@@ -14,7 +14,8 @@
 spring:
   datasource:
     driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
-    url: jdbc:shardingsphere:classpath:sharding/sharding-jdbc-autotest.yaml
+    # placeholder-type=environment：ShardingSphere 按环境变量渲染 YAML 中的 $${VAR::默认值} 占位符
+    url: jdbc:shardingsphere:classpath:sharding/sharding-jdbc-autotest.yaml?placeholder-type=environment
   data:
     redis:
       database: 1

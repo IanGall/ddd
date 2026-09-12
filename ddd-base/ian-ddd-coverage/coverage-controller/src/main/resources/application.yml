@@ -1,5 +1,8 @@
 server:
   port: 8099
+  # 仅本机可访问：覆盖率工具链（E2E 脚本、本地浏览报告）不需要对外暴露，
+  # 避免源码级 HTML 报告被同网段读取。
+  address: 127.0.0.1
 
 spring:
   application:

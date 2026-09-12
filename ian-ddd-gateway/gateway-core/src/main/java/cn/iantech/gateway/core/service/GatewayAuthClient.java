@@ -1,4 +1,4 @@
-package cn.iantech.gateway.service;
+package cn.iantech.gateway.core.service;
 
 import cn.iantech.api.IAuthService;
 import cn.iantech.api.ICustomerService;
@@ -7,7 +7,6 @@ import cn.iantech.api.model.channel.ChannelSignatureVerifyReq;
 import cn.iantech.api.model.customer.CustomerLoginReq;
 import cn.iantech.api.model.customer.CustomerUserDTO;
 import org.apache.dubbo.config.annotation.DubboReference;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -16,8 +15,9 @@ import static cn.iantech.common.constant.Constants.ResponseCode.AUTH_UNAVAILABLE
 
 /**
  * 网关到 Auth 服务的 RPC 适配器。网关不持有令牌或会话状态。
+ *
+ * <p>由 {@code GatewayCoreAutoConfiguration} 以 Bean 形式注册，不依赖组件扫描。</p>
  */
-@Component
 public class GatewayAuthClient {
 
     @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)

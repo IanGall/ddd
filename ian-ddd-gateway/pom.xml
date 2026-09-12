@@ -34,6 +34,11 @@
             </dependency>
             <dependency>
                 <groupId>cn.iantech</groupId>
+                <artifactId>ian-ddd-gateway-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iantech</groupId>
                 <artifactId>ian-frame-archetype-std-api</artifactId>
                 <version>${ian.std.version}</version>
             </dependency>
@@ -46,6 +51,8 @@
     </dependencyManagement>
 
     <modules>
+        <!-- gateway-core 先于 gateway-app 构建：app 依赖 core 制品 -->
+        <module>gateway-core</module>
         <module>gateway-app</module>
     </modules>
 

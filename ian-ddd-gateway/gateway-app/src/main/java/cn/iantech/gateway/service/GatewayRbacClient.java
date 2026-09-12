@@ -3,6 +3,7 @@ package cn.iantech.gateway.service;
 import cn.iantech.api.IPlatformAccountService;
 import cn.iantech.api.IRbacService;
 import cn.iantech.api.model.rbac.*;
+import cn.iantech.gateway.core.service.RpcCallGuard;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Component;
 
