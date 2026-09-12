@@ -1,11 +1,7 @@
 package cn.iantech.context.web;
 
-import cn.dev33.satoken.stp.StpLogic;
-import cn.dev33.satoken.stp.StpUtil;
 import cn.iantech.context.core.ContextAccessor;
 import cn.iantech.context.core.RequestContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -16,27 +12,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ContextWebFilterTest {
 
-    private final ContextWebFilter filter = new ContextWebFilter();
-    private StpLogic originalStpLogic;
-    private TestStpLogic testStpLogic;
-
-    @BeforeEach
-    void configureStpLogic() {
-        originalStpLogic = StpUtil.getStpLogic();
-        testStpLogic = new TestStpLogic();
-        StpUtil.setStpLogic(testStpLogic);
-    }
-
-    // 每个测试结束后恢复 Sa-Token 逻辑，避免测试之间相互污染
-    @AfterEach
-    void restoreStpLogic() {
-        StpUtil.setStpLogic(originalStpLogic);
-    }
-
-    // 验证只从 Sa-Token 登录主体建立上下文，并忽略外部传入的身份请求头
+    // 验证可信主体只来自注入的解析器，外部传入的身份请求头一律忽略
     @Test
-    void shouldBuildContextFromAuthenticatedPrincipalAndIgnoreExternalIdentityHeaders() throws Exception {
-        testStpLogic.loginId = "test-admin";
+    void shouldBuildContextFromResolverPrincipalAndIgnoreExternalIdentityHeaders() throws Exception {
+        ContextWebFilter filter = new ContextWebFilter(() ->
+                new ResolvedAuthenticationContext("test-admin", null, null, null, null, null, null, null));
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(ContextWebFilter.REQUEST_ID_HEADER, "request-001");
         request.addHeader("X-User-Id", "forged-user");
@@ -65,6 +45,7 @@ class ContextWebFilterTest {
     // 验证外部请求号非法时生成并回写新的请求号
     @Test
     void shouldGenerateNewRequestIdWhenIncomingRequestIdIsInvalid() throws Exception {
+        ContextWebFilter filter = new ContextWebFilter();
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(ContextWebFilter.REQUEST_ID_HEADER, "非法 请求号");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -104,50 +85,42 @@ class ContextWebFilterTest {
         assertEquals("7", captured.get().credentialVersion());
     }
 
-    // 验证未登录请求不会被误识别为可信主体
+    // 验证默认解析器不提供任何身份，伪造身份请求头不会把匿名请求变成可信主体
     @Test
-    void shouldIgnoreAnonymousLoginId() {
-        DefaultAuthenticationContextResolver resolver = new DefaultAuthenticationContextResolver();
+    void shouldResolveAnonymousContextByDefault() throws Exception {
+        ContextWebFilter filter = new ContextWebFilter();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-User-Id", "forged-user");
+        request.addHeader("X-Tenant-Id", "forged-tenant");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<RequestContext> captured = new AtomicReference<>();
 
-        ResolvedAuthenticationContext resolved = resolver.resolve();
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) ->
+                captured.set(ContextAccessor.current().orElseThrow()));
 
-        assertNull(resolved.principalName());
-        assertNull(resolved.tenantId());
-        assertNull(resolved.userId());
-        assertNull(resolved.subjectType());
-        assertNull(resolved.clientId());
-        assertNull(resolved.ownerAccountId());
-        assertNull(resolved.authorizedScope());
-        assertNull(resolved.credentialVersion());
+        assertNull(captured.get().principalName());
+        assertNull(captured.get().userId());
+        assertNull(captured.get().tenantId());
+        assertNull(captured.get().subjectType());
+        assertNull(captured.get().clientId());
+        assertNull(captured.get().ownerAccountId());
+        assertNull(captured.get().authorizedScope());
+        assertNull(captured.get().credentialVersion());
+        assertFalse(ContextAccessor.current().isPresent());
     }
 
-    // 验证非法登录 ID 不会进入请求上下文
+    // 验证解析器返回空结果时过滤器仍按匿名上下文处理
     @Test
-    void shouldIgnoreInvalidLoginId() {
-        testStpLogic.loginId = "非法 登录号";
-        DefaultAuthenticationContextResolver resolver = new DefaultAuthenticationContextResolver();
+    void shouldFallBackToAnonymousContextWhenResolverReturnsNull() throws Exception {
+        ContextWebFilter filter = new ContextWebFilter(() -> null);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<RequestContext> captured = new AtomicReference<>();
 
-        ResolvedAuthenticationContext resolved = resolver.resolve();
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) ->
+                captured.set(ContextAccessor.current().orElseThrow()));
 
-        assertNull(resolved.principalName());
-    }
-
-    private static final class TestStpLogic extends StpLogic {
-
-        private String loginId;
-
-        private TestStpLogic() {
-            super("test");
-        }
-
-        @Override
-        public boolean isLogin() {
-            return loginId != null;
-        }
-
-        @Override
-        public String getLoginIdAsString() {
-            return loginId;
-        }
+        assertNull(captured.get().principalName());
+        assertFalse(ContextAccessor.current().isPresent());
     }
 }

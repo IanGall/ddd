@@ -1,24 +1,24 @@
 package cn.iantech.context.web;
 
-import cn.dev33.satoken.stp.StpUtil;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 
 /**
- * Web 上下文过滤器自动装配。过滤器在 Sa-Token 认证过滤器之后执行。
+ * Web 上下文过滤器自动装配。过滤器在应用认证过滤器之后执行。
  */
 @AutoConfiguration
-@ConditionalOnClass(StpUtil.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class ContextWebAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
     public AuthenticationContextResolver authenticationContextResolver() {
-        return new DefaultAuthenticationContextResolver();
+        // 默认解析为匿名上下文，需要可信身份的应用自行注入解析器。
+        return ResolvedAuthenticationContext::empty;
     }
 
     @Bean
@@ -30,7 +30,7 @@ public class ContextWebAutoConfiguration {
     @Bean
     public FilterRegistrationBean<ContextWebFilter> contextWebFilterRegistration(ContextWebFilter filter) {
         FilterRegistrationBean<ContextWebFilter> registration = new FilterRegistrationBean<>(filter);
-        // 使用最低优先级确保认证完成后再建立上下文。
+        // 使用最低优先级，确保认证过滤器先执行后再建立上下文。
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         return registration;
     }

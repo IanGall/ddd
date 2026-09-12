@@ -41,7 +41,7 @@ ddd/
 | ShardingSphere      | 5.5.3   | 分库分表（user_order 2 库 × 4 表）               |
 | XXL-Job             | 3.4.2   | 定时任务                                         |
 | Kafka               | 由 Boot 管理 | 消息监听（trigger，`kafka.enabled` 可关闭）  |
-| Sa-Token            | 1.46.0  | 密码编码等安全工具                               |
+| Spring Security Crypto | 由 Boot 管理 | BCrypt 密码编码                              |
 | JUnit               | 6.1.3   | 单元测试与集成测试                               |
 | JaCoCo              | 0.8.13  | 单服务覆盖率门槛与 E2E 采集                      |
 
