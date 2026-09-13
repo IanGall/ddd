@@ -1,5 +1,6 @@
 package cn.iantech.infrastructure.persistent.repository;
 
+import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.rbac.infra.IRbacAccountRepository;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.id.GlobalIdGenerator;
@@ -7,9 +8,12 @@ import cn.iantech.infrastructure.persistent.dao.IRbacAccountDao;
 import cn.iantech.infrastructure.persistent.po.RbacAccountPO;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+
+import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 @Repository
 @RequiredArgsConstructor
@@ -23,7 +27,12 @@ public class RbacAccountRepository implements IRbacAccountRepository {
     public RbacAccountEntity save(RbacAccountEntity entity) {
         RbacAccountPO item = converter.convert(entity, RbacAccountPO.class);
         item.setId(globalIdGenerator.nextId());
-        accountDao.insert(item);
+        try {
+            accountDao.insert(item);
+        } catch (DuplicateKeyException exception) {
+            // 并发开户时由 username 唯一索引兜底，避免裸 DuplicateKeyException 直接 500
+            throw new AppException(INVALID_ARGUMENT.getCode(), "账号名已存在");
+        }
         return converter.convert(item, RbacAccountEntity.class);
     }
 
