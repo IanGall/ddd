@@ -84,6 +84,23 @@
                                                 </limit>
                                             </limits>
                                         </rule>
+                                        <!--
+                                          gateway-core 承载认证过滤器/验签/异常翻译等安全关键逻辑，
+                                          此前未纳入门槛；阈值取当前覆盖率（约 18.25%）向下取整到 5%，只挡回退。
+                                        -->
+                                        <rule>
+                                            <element>BUNDLE</element>
+                                            <includes>
+                                                <include>cn.iantech:ian-ddd-gateway-core</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.15</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
                                     </rules>
                                 </configuration>
                             </execution>

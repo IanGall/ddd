@@ -126,7 +126,7 @@
         <!--
           覆盖率门槛：同 id 覆盖 ddd-base 的通用 60% 规则，按模块当前水平设防回退阈值。
           阈值取“当前覆盖率向下取整到 5%”，只挡回退、不阻塞正常演进。
-          trigger / api 尚无测试，暂不设门槛；补上测试后再按同样方式加规则。
+          domain 0.35 / infrastructure 0.15 / trigger 0.30；契约模块（ian-ddd-auth-api）在 ian-ddd-api 聚合下，不属本 pom 范围。
         -->
         <profile>
             <id>coverage-gate</id>
