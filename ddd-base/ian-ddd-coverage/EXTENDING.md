@@ -192,7 +192,7 @@ coverage:
     - name: gateway
       host: 127.0.0.1
       port: 6300
-    - name: std
+    - name: auth
       host: 127.0.0.1
       port: 6301
     - name: order                    # 新增
@@ -296,7 +296,7 @@ coverage:
 
 ```properties
 coverage.controller.url=http://127.0.0.1:8099
-coverage.agents=gateway,std,order        # 参与采集的 Agent，留空表示全部
+coverage.agents=gateway,auth,order        # 参与采集的 Agent，留空表示全部
 coverage.fail-on-error=false             # 控制器不可用时是否让测试失败
 ```
 

@@ -26,8 +26,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # 单次根构建覆盖全部模块，避免 std / gateway 被重复构建。
-      # -Pcoverage-gate 激活各父 pom 的分档单服务覆盖率门槛（ddd-base / std / gateway）。
+      # 单次根构建覆盖全部模块，避免 auth / gateway 被重复构建。
+      # -Pcoverage-gate 激活各父 pom 的分档单服务覆盖率门槛（ddd-base / auth / gateway）。
       # 分布式 E2E 覆盖率不在 CI 运行：需要 Nacos、Redis、MySQL 与真实服务，用 coverage-e2e.sh 本地或专用流水线执行。
       - name: 构建并验证（含单服务覆盖率门槛）
         run: mvn -B install -Pcoverage-gate
