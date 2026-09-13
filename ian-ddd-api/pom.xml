@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.iantech</groupId>
+        <artifactId>ddd</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ian-ddd-api</artifactId>
+    <packaging>pom</packaging>
+    <name>ian-ddd-api</name>
+    <description>API 契约聚合工程：按「内部/外部」分类拆分子模块，独立于任何服务实现</description>
+
+    <properties>
+        <!-- 契约只是 DTO 与接口，父级用聚合器而非 ddd-base，避免继承 ddd-base 的 60% 覆盖率门槛 -->
+        <ddd.base.version>1.0-SNAPSHOT</ddd.base.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <modules>
+        <!-- 内部：服务间 Dubbo RPC 契约（cn.iantech.api.*） -->
+        <module>ian-ddd-api-internal</module>
+        <!-- 外部：对外/第三方 HTTP 契约，声明式 @HttpExchange -->
+        <module>ian-ddd-api-external</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>ddd-base-bom</artifactId>
+                <version>${ddd.base.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

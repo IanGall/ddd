@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: ian-ddd-auth-boot
+  profiles:
+    active: dev
+    # 自动化测试请按「dev,autotest」顺序激活（见 application-autotest.yml）：
+    # 多个 profile 同时激活时后者优先，autotest 放最后才能覆盖 dev 的 MySQL/Redis 为测试库。
+
+dubbo:
+  application:
+    qos-enable: ${DUBBO_QOS_ENABLED:false}
+
+# Auth 服务 opaque Token 生命周期（单位：秒）
+auth:
+  security:
+    session:
+      access-token-timeout: ${AUTH_ACCESS_TOKEN_TIMEOUT:9000}
+      refresh-token-timeout: ${AUTH_REFRESH_TOKEN_TIMEOUT:2592000}
+
+# 所有业务实例必须连接同一 Redis，并共享该命名空间以保证 ID 全局唯一。
+ddd:
+  id-generator:
+    namespace: ${DDD_ID_GENERATOR_NAMESPACE:ddd-global-id}

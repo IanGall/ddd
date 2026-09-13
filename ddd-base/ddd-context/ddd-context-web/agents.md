@@ -4,7 +4,7 @@
 
 - 本模块在 Spring Web 请求边界建立协议无关的 `RequestContext`。
 - `ContextWebFilter` 负责读取请求信息、安装上下文、回写请求标识并在请求结束后恢复父上下文。
-- 本模块只适用于 Gateway 或显式启用 HTTP Profile 的标准服务，Application 层应只依赖 Core。
+- 本模块只适用于 Gateway 或显式启用 HTTP Profile 的认证服务，Application 层应只依赖 Core。
 
 ## HTTP 与认证约束
 

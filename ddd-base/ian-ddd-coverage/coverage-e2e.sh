@@ -26,7 +26,7 @@
 #   COVERAGE_SPRING_PROFILES    服务激活的 Spring profile，默认 dev,autotest（后者优先，指向测试库）
 #   COVERAGE_E2E_LOGIN_NAME      管理员登录名；不填则自动开户并缓存凭证
 #   COVERAGE_E2E_LOGIN_PASSWORD  管理员密码；不填则读取 .env.local 的同名变量
-#   COVERAGE_PLATFORM_TOKEN      平台开户令牌；与标准服务 PLATFORM_ADMIN_TOKEN 一致，不填则读取 .env.local
+#   COVERAGE_PLATFORM_TOKEN      平台开户令牌；与认证服务 PLATFORM_ADMIN_TOKEN 一致，不填则读取 .env.local
 #   COVERAGE_SKIP_BUILD          设为 1 跳过 clean 构建（快速重跑）
 #   WORKSPACE_DIR                覆盖工作区根目录探测结果
 #   EXTRA_SERVICES               追加启动的业务服务，逗号分隔，每项格式：
@@ -105,12 +105,13 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$(detect_workspace_root || true)}"
 }
 DDD_BASE_DIR="${WORKSPACE_DIR}/ddd-base"
 GATEWAY_DIR="${WORKSPACE_DIR}/ian-ddd-gateway"
-STD_DIR="${WORKSPACE_DIR}/ian-ddd-archetype-std"
+AUTH_DIR="${WORKSPACE_DIR}/ian-ddd-auth"
+API_INTERNAL_DIR="${WORKSPACE_DIR}/ian-ddd-api/ian-ddd-api-internal"
 
 CONTROLLER_PORT="${CONTROLLER_PORT:-8099}"
 GATEWAY_PORT="${GATEWAY_PORT:-8092}"
 GATEWAY_AGENT_PORT="${GATEWAY_AGENT_PORT:-6300}"
-STD_AGENT_PORT="${STD_AGENT_PORT:-6301}"
+AUTH_AGENT_PORT="${AUTH_AGENT_PORT:-6301}"
 
 COVERAGE_HOME="${COVERAGE_HOME:-${WORKSPACE_DIR}/coverage}"
 SESSIONS_DIR="${COVERAGE_HOME}/sessions"
@@ -279,7 +280,7 @@ stop_all() {
     done
     stop_port "${GATEWAY_PORT}" "Gateway"
     stop_port "${GATEWAY_AGENT_PORT}" "Gateway 的覆盖率 Agent"
-    stop_port "${STD_AGENT_PORT}" "标准服务的覆盖率 Agent"
+    stop_port "${AUTH_AGENT_PORT}" "认证服务的覆盖率 Agent"
     stop_port "${CONTROLLER_PORT}" "覆盖率控制器"
     stop_maven_run
 }
@@ -307,9 +308,9 @@ build_all() {
     info "清理并构建 ddd-base（含覆盖率模块）"
     (cd "${DDD_BASE_DIR}" && mvn -q -o clean install -DskipTests) \
         || fail "ddd-base 构建失败"
-    info "清理并构建标准服务"
-    (cd "${STD_DIR}" && mvn -q -o clean install -DskipTests) \
-        || fail "标准服务构建失败"
+    info "清理并构建认证服务"
+    (cd "${AUTH_DIR}" && mvn -q -o clean install -DskipTests) \
+        || fail "认证服务构建失败"
     info "清理并构建 Gateway"
     (cd "${GATEWAY_DIR}" && mvn -q -o clean install -DskipTests) \
         || fail "Gateway 构建失败"
@@ -331,10 +332,10 @@ preflight() {
     local missing=()
     for dir in \
         "${GATEWAY_DIR}/gateway-app/target/classes" \
-        "${STD_DIR}/ian-frame-archetype-std-trigger/target/classes" \
-        "${STD_DIR}/ian-frame-archetype-std-domain/target/classes" \
-        "${STD_DIR}/ian-frame-archetype-std-infrastructure/target/classes" \
-        "${STD_DIR}/ian-frame-archetype-std-api/target/classes"; do
+        "${AUTH_DIR}/ian-ddd-auth-trigger/target/classes" \
+        "${AUTH_DIR}/ian-ddd-auth-domain/target/classes" \
+        "${AUTH_DIR}/ian-ddd-auth-infrastructure/target/classes" \
+        "${API_INTERNAL_DIR}/target/classes"; do
         [[ -d "${dir}" ]] || missing+=("${dir}")
     done
 
@@ -354,7 +355,7 @@ preflight() {
     fi
 }
 
-# 定位服务的带覆盖率启动脚本（标准服务骨架在 docs/dev-ops，网关骨架在 dev-ops）
+# 定位服务的带覆盖率启动脚本（认证服务骨架在 docs/dev-ops，网关骨架在 dev-ops）
 extra_service_start_script() {
     local dir="$1" candidate
     for candidate in "${dir}/docs/dev-ops/start-with-coverage.sh" "${dir}/dev-ops/start-with-coverage.sh"; do
@@ -369,7 +370,7 @@ extra_service_start_script() {
 # 启动前先释放端口：上次异常退出可能留下监听进程，导致新实例启动失败
 reclaim_ports() {
     local occupied=() port
-    for port in "${CONTROLLER_PORT}" "${GATEWAY_PORT}" "${GATEWAY_AGENT_PORT}" "${STD_AGENT_PORT}"; do
+    for port in "${CONTROLLER_PORT}" "${GATEWAY_PORT}" "${GATEWAY_AGENT_PORT}" "${AUTH_AGENT_PORT}"; do
         port_listening "${port}" && occupied+=("${port}")
     done
     local count index agent_port
@@ -401,20 +402,20 @@ start_services() {
     grep -q "Started CoverageControllerApplication" "${LOG_DIR}/controller.log" \
         || fail "控制器未完成启动，日志：${LOG_DIR}/controller.log"
 
-    start_std_service
+    start_auth_service
     start_gateway
     start_extra_services
 
     info "所有服务已就绪"
 }
 
-# 标准服务：纯 Dubbo 提供方，无 web 端口，以 Agent 端口 + Spring 启动日志判定就绪
-start_std_service() {
-    info "启动标准服务（Agent 端口 ${STD_AGENT_PORT}）"
-    nohup bash "${STD_DIR}/docs/dev-ops/start-with-coverage.sh" > "${LOG_DIR}/std.log" 2>&1 &
-    wait_for_port "${STD_AGENT_PORT}" 120 "标准服务 Agent" \
-        || fail "标准服务启动失败，日志：${LOG_DIR}/std.log"
-    wait_for_log "${LOG_DIR}/std.log" "Started .*Application" 120 "标准服务"
+# 认证服务：纯 Dubbo 提供方，无 web 端口，以 Agent 端口 + Spring 启动日志判定就绪
+start_auth_service() {
+    info "启动认证服务（Agent 端口 ${AUTH_AGENT_PORT}）"
+    nohup bash "${AUTH_DIR}/docs/dev-ops/start-with-coverage.sh" > "${LOG_DIR}/auth.log" 2>&1 &
+    wait_for_port "${AUTH_AGENT_PORT}" 120 "认证服务 Agent" \
+        || fail "认证服务启动失败，日志：${LOG_DIR}/auth.log"
+    wait_for_log "${LOG_DIR}/auth.log" "Started .*Application" 120 "认证服务"
 }
 
 # Gateway：HTTP 健康检查返回 2xx 即说明 Spring 上下文已就绪
@@ -489,7 +490,7 @@ ensure_account() {
     fi
 
     # 3) 开户：接口返回的 loginName 形如「用户名@accountId.com」，必须完整使用
-    [[ -n "${PLATFORM_TOKEN}" ]] || fail "未提供平台开户令牌：请设置 COVERAGE_PLATFORM_TOKEN（与标准服务 PLATFORM_ADMIN_TOKEN 一致，可写入仓库根 .env.local）"
+    [[ -n "${PLATFORM_TOKEN}" ]] || fail "未提供平台开户令牌：请设置 COVERAGE_PLATFORM_TOKEN（与认证服务 PLATFORM_ADMIN_TOKEN 一致，可写入仓库根 .env.local）"
     [[ -n "${DEFAULT_ACCOUNT_PASSWORD}" ]] || fail "未提供开户密码：请设置 COVERAGE_E2E_LOGIN_PASSWORD（可写入仓库根 .env.local，模板见 .env.example）"
     local response
     response="$(curl -s -X POST "http://127.0.0.1:${GATEWAY_PORT}/api/admin/platform/accounts" \
@@ -680,7 +681,7 @@ print_report() {
     echo
     echo " 服务日志："
     echo "   controller    : ${LOG_DIR}/controller.log"
-    echo "   std           : ${LOG_DIR}/std.log"
+    echo "   auth          : ${LOG_DIR}/auth.log"
     echo "   gateway       : ${LOG_DIR}/gateway.log"
     echo "   测试输出       : ${LOG_DIR}/test.log"
     echo "======================================================================"
@@ -699,7 +700,7 @@ show_status() {
     printf '  %-22s %s\n' "工作区根目录" "${WORKSPACE_DIR}"
     printf '  %-22s %s\n' "覆盖率模块" "${COVERAGE_DIR}"
     printf '  %-22s %s\n' "Gateway" "${GATEWAY_DIR}"
-    printf '  %-22s %s\n' "标准服务" "${STD_DIR}"
+    printf '  %-22s %s\n' "认证服务" "${AUTH_DIR}"
     printf '  %-22s %s\n' "覆盖率产物" "${COVERAGE_HOME}"
     printf '  %-22s %s\n' "日志目录" "${LOG_DIR}"
     echo
@@ -707,7 +708,7 @@ show_status() {
     printf '  %-24s %s\n' "覆盖率控制器:${CONTROLLER_PORT}" "$(port_listening "${CONTROLLER_PORT}" && echo 运行中 || echo 未运行)"
     printf '  %-24s %s\n' "Gateway:${GATEWAY_PORT}" "$(port_listening "${GATEWAY_PORT}" && echo 运行中 || echo 未运行)"
     printf '  %-24s %s\n' "Gateway Agent:${GATEWAY_AGENT_PORT}" "$(port_listening "${GATEWAY_AGENT_PORT}" && echo 运行中 || echo 未运行)"
-    printf '  %-24s %s\n' "标准服务 Agent:${STD_AGENT_PORT}" "$(port_listening "${STD_AGENT_PORT}" && echo 运行中 || echo 未运行)"
+    printf '  %-24s %s\n' "认证服务 Agent:${AUTH_AGENT_PORT}" "$(port_listening "${AUTH_AGENT_PORT}" && echo 运行中 || echo 未运行)"
     local count index name agent_port
     count="$(extra_service_count)"
     for (( index = 0; index < count; index++ )); do

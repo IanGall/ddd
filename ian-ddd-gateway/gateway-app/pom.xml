@@ -47,7 +47,7 @@
         </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>
-            <artifactId>ian-frame-archetype-std-api</artifactId>
+            <artifactId>ian-ddd-api-internal</artifactId>
         </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>

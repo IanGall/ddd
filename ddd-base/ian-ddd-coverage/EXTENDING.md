@@ -4,7 +4,7 @@
 
 适用对象：
 
-- 用 `scaffold-std` 生成的 DDD 标准服务（api / domain / infrastructure / trigger / boot 五模块）
+- 用 `scaffold-std` 生成的 DDD 认证服务（api / domain / infrastructure / trigger / boot 五模块）
 - 用 `scaffold-gateway` 生成的网关应用
 - 任何以 Spring Boot 启动、需要被 E2E 测试覆盖的服务
 
@@ -120,9 +120,9 @@ coverage:
 
 ---
 
-## 二、标准服务（scaffold-std）生成的工程
+## 二、认证服务（scaffold-std）生成的工程
 
-标准服务骨架已经内置两个文件， **无需额外配置**：
+认证服务骨架已经内置两个文件， **无需额外配置**：
 
 ```text
 <你的工程>/
@@ -138,7 +138,7 @@ coverage:
 | 服务     | Agent 端口 | 说明 |
 |----------|------------|------|
 | Gateway  | 6300       | 固定 |
-| 标准服务 | 6301       | 固定 |
+| 认证服务 | 6301       | 固定 |
 | 新服务 A | 6302       | 顺延 |
 | 新服务 B | 6303       | 顺延 |
 
@@ -448,7 +448,7 @@ comm -12 <(cd 服务A/target/classes && find . -name '*.class' | sort) \
 
 ### 服务启动脚本找不到
 
-流水线会在两个位置查找：`docs/dev-ops/start-with-coverage.sh`（标准服务骨架）与
+流水线会在两个位置查找：`docs/dev-ops/start-with-coverage.sh`（认证服务骨架）与
 `dev-ops/start-with-coverage.sh`（网关骨架）。都没有时会直接报错并给出路径。
 
 ### 多副本部署（K8s）

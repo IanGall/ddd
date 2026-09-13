@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  网关日志配置：与标准服务保持一致的格式，控制台与文件均输出 %X{trace-id}，
-  由 GatewayAuthFilter 写入 MDC，使网关日志与下游标准服务共享同一追踪号。
+  网关日志配置：与认证服务保持一致的格式，控制台与文件均输出 %X{trace-id}，
+  由 GatewayAuthFilter 写入 MDC，使网关日志与下游认证服务共享同一追踪号。
 -->
 <configuration scan="true" scanPeriod="10 seconds">
 

@@ -5,7 +5,7 @@ spring:
   application:
     name: ian-ddd-gateway
   profiles:
-    # 自动化测试请与标准服务一致地按「dev,autotest」顺序激活（网关本身不持有数据源）。
+    # 自动化测试请与认证服务一致地按「dev,autotest」顺序激活（网关本身不持有数据源）。
     active: dev
 
 # 生产环境按部署约束保持 HTTP，渠道请求通过签名认证，不启用 TLS/mTLS。

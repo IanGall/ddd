@@ -56,7 +56,7 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String requestId = validOrGenerate(request.getHeader(REQUEST_ID_HEADER));
         response.setHeader(REQUEST_ID_HEADER, requestId);
-        // 让网关自身的日志与下游标准服务共享同一 trace-id，便于跨进程排障
+        // 让网关自身的日志与下游认证服务共享同一 trace-id，便于跨进程排障
         MDC.put(ContextKeys.TRACE_ID, requestId);
         try {
             RouteKind routeKind = classifyRoute(request);

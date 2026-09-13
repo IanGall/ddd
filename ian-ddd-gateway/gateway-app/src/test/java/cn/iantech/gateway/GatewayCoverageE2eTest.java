@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * 分布式覆盖率端到端测试。
  *
- * <p>需要 Gateway 与标准服务都以 jacocoagent tcpserver 模式运行，并先启动 coverage-controller。
+ * <p>需要 Gateway 与认证服务都以 jacocoagent tcpserver 模式运行，并先启动 coverage-controller。
  * 未设置 {@code RUN_COVERAGE_E2E=true} 时自动跳过，避免影响常规构建。</p>
  *
  * <p>启用方式：</p>
@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * # 1. 启动覆盖率控制器
  * mvn -f ddd-base/ian-ddd-coverage/coverage-controller/pom.xml spring-boot:run
  *
- * # 2. 带 jacocoagent 启动标准服务与 Gateway（见各自 README 的覆盖率小节）
+ * # 2. 带 jacocoagent 启动认证服务与 Gateway（见各自 README 的覆盖率小节）
  *
  * # 3. 运行本测试
  * RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=GatewayCoverageE2eTest

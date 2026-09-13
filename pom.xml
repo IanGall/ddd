@@ -10,11 +10,12 @@
     <packaging>pom</packaging>
 
     <name>ddd</name>
-    <description>DDD 基座、网关与标准服务的聚合工程</description>
+    <description>DDD 基座、共享 RPC 契约、网关与认证服务的聚合工程</description>
 
     <modules>
         <module>ddd-base</module>
-        <module>ian-ddd-archetype-std</module>
+        <module>ian-ddd-api</module>
+        <module>ian-ddd-auth</module>
         <module>ian-ddd-gateway</module>
     </modules>
 </project>

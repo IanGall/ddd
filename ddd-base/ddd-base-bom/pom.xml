@@ -64,6 +64,17 @@
                 <artifactId>ddd-test-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- 服务 API 契约（聚合 ian-ddd-api 下按内外分类的子模块），独立于具体服务实现 -->
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>ian-ddd-api-internal</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iantech</groupId>
+                <artifactId>ian-ddd-api-external</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

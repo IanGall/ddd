@@ -9,7 +9,7 @@ Dubbo 微服务分布式 E2E 覆盖率基础设施。测试只写在 Gateway 层
 |------------|----------------------------------------------------------|---------------------------------------------------------------|
 | 怎么跑     | `mvn verify -Pcoverage-gate`                             | `ddd-base/ian-ddd-coverage/coverage-e2e.sh`                   |
 | 测什么     | 各模块**自己的单元测试**执行路径                         | 从 Gateway 发起的**真实跨服务调用链**                         |
-| 覆盖范围   | 各模块 `src/main`（`ddd-base` + std + gateway 已配门槛） | Gateway + 标准服务的 trigger/domain/infrastructure/api        |
+| 覆盖范围   | 各模块 `src/main`（`ddd-base` + auth + gateway 已配门槛） | Gateway + 认证服务的 trigger/domain/infrastructure/api        |
 | 外部依赖   | 无（离线可跑、秒级反馈）                                 | Nacos / Redis / MySQL + 服务全部启动（约 40 秒）              |
 | 阈值       | 见下「门槛配置」                                         | 并集行覆盖目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可调） |
 | 数字从哪看 | `target/site/jacoco/index.html`                          | `coverage/sessions/<id>/reports/index.html`                   |
@@ -27,20 +27,20 @@ Dubbo 微服务分布式 E2E 覆盖率基础设施。测试只写在 Gateway 层
 | `ddd-common` / `ddd-context-*` / `ddd-redis-starter` / `ddd-id-generator-starter` | 60%      | 70% – 98%            |
 | `coverage-controller` / `coverage-junit-extension`                                | 60%      | 81% / 60.2%          |
 | `ian-ddd-gateway`（gateway-app）                                                  | 60%      | 74.0%                |
-| `ian-frame-archetype-std-domain`                                                  | 35%      | 40.6%                |
-| `ian-frame-archetype-std-infrastructure`                                          | 15%      | 21.1%                |
-| `ian-frame-archetype-std-trigger` / `-api`                                        | 暂无门槛 | 尚无测试，补测后再加 |
+| `ian-ddd-auth-domain`                                                  | 35%      | 40.6%                |
+| `ian-ddd-auth-infrastructure`                                          | 15%      | 21.1%                |
+| `ian-ddd-auth-trigger` / `-api`                                        | 暂无门槛 | 尚无测试，补测后再加 |
 
 门槛定义位置：
 
 - `ddd-base/pom.xml` → `coverage-gate` profile：通用 BUNDLE 60% 规则
 - `ian-ddd-gateway/pom.xml` → 同 id profile，`includes` 限定到 gateway-app
-- `ian-ddd-archetype-std/pom.xml` → 同 id profile，domain / infrastructure 各一条规则
+- `ian-ddd-auth/pom.xml` → 同 id profile，domain / infrastructure 各一条规则
 
 > 同 id profile 在子工程中 **覆盖**父工程的 `<rules>`：子工程声明的规则集整体替换父工程的规则集，不会叠加。
 > 因此子工程必须写全自己需要的规则。
 >
-> 规则作用域用 `includes` 限定到具体模块；未命中的模块（如 std 的 trigger / api）不受该规则约束，
+> 规则作用域用 `includes` 限定到具体模块；未命中的模块（如 auth 的 trigger / api）不受该规则约束，
 > 加了测试之后同样可以正常跑 `-Pcoverage-gate`。
 
 给新模块加门槛：在所属父 pom 的 `coverage-gate` profile 里追加一条 `<rule>`，
@@ -59,7 +59,7 @@ JaCoCo 版本唯一来源：仓库根目录的 `.mvn/jacoco-version`（Shell 脚
                               │ Dubbo
                               ▼
                        ┌─────────────┐
-                       │ 标准服务     │  jacocoagent tcpserver :6301
+                       │ 认证服务     │  jacocoagent tcpserver :6301
                        └─────────────┘
 
         coverage-controller 主动连接各 Agent，执行 reset / dump / merge / report
@@ -161,8 +161,8 @@ ddd-base/ian-ddd-coverage/coverage-e2e.sh --keep
 | user_order 分片                | `ian_test_tech_db_00/01`   |
 | Redis                          | db 1（dev 为 db 0）        |
 
-一次性初始化（建库 + 建表 + 样例数据）：`ddd_rbac_test` 用 `ian-frame-archetype-std-boot/src/test/resources/sql/schema-rbac-mysql.sql`；
-两个分片库用 `ian-ddd-archetype-std/docs/dev-ops/environment/sql/ian_dev_tech_db_0{0,1}.sql`（把库名中的
+一次性初始化（建库 + 建表 + 样例数据）：`ddd_rbac_test` 用 `ian-ddd-auth-boot/src/test/resources/sql/schema-rbac-mysql.sql`；
+两个分片库用 `ian-ddd-auth/docs/dev-ops/environment/sql/ian_dev_tech_db_0{0,1}.sql`（把库名中的
 `ian_dev` 换成 `ian_test` 后执行）。E2E 会自行开户，不依赖库内种子数据。
 
 > `autotest` 必须放在 profile 列表最后（`dev,autotest`）才能覆盖 dev 的库地址：多个 profile 同时激活时后者优先。
@@ -186,8 +186,8 @@ mvn -f ddd-base/ian-ddd-coverage/coverage-controller/pom.xml spring-boot:run
 # Gateway（Agent 端口 6300）
 ian-ddd-gateway/dev-ops/start-with-coverage.sh
 
-# 标准服务（Agent 端口 6301）
-ian-ddd-archetype-std/docs/dev-ops/start-with-coverage.sh
+# 认证服务（Agent 端口 6301）
+ian-ddd-auth/docs/dev-ops/start-with-coverage.sh
 ```
 
 两个脚本只是把 jacocoagent 以 `output=tcpserver` 注入 JVM，服务本身不需要感知控制器。
@@ -219,7 +219,7 @@ RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=Gat
 [Coverage] 本次测试覆盖率汇总（Session 20260912-093808-9b1fe）
 ------------------------------------------------------------
     gateway: 行覆盖 82.0%（已覆盖 820/1000）
-    std: 行覆盖 76.0%（已覆盖 760/1000）
+    auth: 行覆盖 76.0%（已覆盖 760/1000）
     overall: 行覆盖 73.4%（已覆盖 1580/2000）
 ------------------------------------------------------------
 报告入口: http://127.0.0.1:8099/api/coverage/sessions/20260912-093808-9b1fe/reports/index.html
@@ -230,14 +230,14 @@ RUN_COVERAGE_E2E=true mvn -f ian-ddd-gateway/gateway-app/pom.xml test -Dtest=Gat
 ```text
 coverage/sessions/<sessionId>/
 ├── gateway.exec          # 各服务原始 execution data
-├── std.exec
+├── auth.exec
 ├── overall.exec          # 合并结果
 ├── dashboard.html        # 服务级 + 整体覆盖率总览
 └── reports/
     ├── index.html        # 整体 HTML 报告
     ├── overall.xml       # 供 CI 解析
     ├── gateway/index.html
-    └── std/index.html
+    └── auth/index.html
 ```
 
 ## classId 一致性校验
@@ -253,7 +253,7 @@ JaCoCo 按 `classId` 匹配 execution data 与字节码。当被测进程加载�
 
 ```text
 [Coverage] 警告：classId 校验未通过
-  Agent [std] 有 3 个类的字节码与报告目录不一致，这些类的覆盖率被误报为 0%：
+  Agent [auth] 有 3 个类的字节码与报告目录不一致，这些类的覆盖率被误报为 0%：
     cn/iantech/cases/auth/service/AuthCaseService（被测进程 0x54b413fa02c17d1a / 报告目录 0xef85aaf9bd9516aa）
   原因：被测服务启动后源码被重新编译，或服务与报告使用了不同次构建的产物。
   处理：清理并重新构建后重启被测服务，再执行测试。
@@ -297,7 +297,7 @@ curl -X POST http://127.0.0.1:8099/api/coverage/reports/merge \
 
 ```properties
 coverage.controller.url=http://127.0.0.1:8099
-coverage.agents=gateway,std
+coverage.agents=gateway,auth
 coverage.fail-on-error=false
 ```
 

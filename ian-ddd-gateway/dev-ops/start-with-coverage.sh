@@ -65,7 +65,7 @@ AGENT_OPTS="-javaagent:${JACOCO_AGENT_JAR}=output=tcpserver,address=127.0.0.1,po
 
 echo "启动 Gateway，覆盖率 Agent: ${COVERAGE_AGENT_NAME}@127.0.0.1:${COVERAGE_AGENT_PORT}"
 
-# 与标准服务保持同一套自动化测试配置（网关本身不持有数据源）：dev,autotest
+# 与认证服务保持同一套自动化测试配置（网关本身不持有数据源）：dev,autotest
 COVERAGE_SPRING_PROFILES="${COVERAGE_SPRING_PROFILES:-dev,autotest}"
 
 cd "${PROJECT_DIR}/gateway-app"

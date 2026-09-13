@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
  * 网关消费端远程调用的 N+1 防护：一次业务流程只允许发起一次下游 Dubbo 调用。
  *
  * <p>网关是 Dubbo 消费端，SQL 观测通道在这里不适用，「逐元素调用下游」只能靠消费端过滤器发现。
- * 用例在同一个 JVM 内导出 {@link IAuthService} 测试提供者并直连调用，不依赖 Nacos 与标准服务，
+ * 用例在同一个 JVM 内导出 {@link IAuthService} 测试提供者并直连调用，不依赖 Nacos 与认证服务，
  * 因此可以随常规构建执行。</p>
  */
 class GatewayRemoteNPlusOneTest {

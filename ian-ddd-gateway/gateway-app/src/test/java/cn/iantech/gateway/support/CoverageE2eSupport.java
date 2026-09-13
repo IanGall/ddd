@@ -16,10 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * 分布式 E2E 覆盖率测试基座。
  *
- * <p>所有请求真实经过 Gateway → Dubbo → 标准服务，不做任何 Mock，因此被测 JVM 内的
+ * <p>所有请求真实经过 Gateway → Dubbo → 认证服务，不做任何 Mock，因此被测 JVM 内的
  * JaCoCo Agent 能采集到完整调用链的覆盖率。</p>
  *
- * <p>前置条件：Gateway、标准服务（均带 jacocoagent）与 coverage-controller 已启动。
+ * <p>前置条件：Gateway、认证服务（均带 jacocoagent）与 coverage-controller 已启动。
  * 参见 {@code ddd-base/ian-ddd-coverage/README.md} 的一键流水线。</p>
  */
 public final class CoverageE2eSupport {
@@ -37,7 +37,7 @@ public final class CoverageE2eSupport {
 
     /**
      * 平台开户令牌：优先取系统属性 coverage.e2e.platform-token，其次取环境变量 COVERAGE_PLATFORM_TOKEN。
-     * 不内置默认值，由 coverage-e2e.sh 在运行测试时显式注入（与标准服务 PLATFORM_ADMIN_TOKEN 一致）。
+     * 不内置默认值，由 coverage-e2e.sh 在运行测试时显式注入（与认证服务 PLATFORM_ADMIN_TOKEN 一致）。
      */
     private static final String PLATFORM_TOKEN = resolvePlatformToken();
 

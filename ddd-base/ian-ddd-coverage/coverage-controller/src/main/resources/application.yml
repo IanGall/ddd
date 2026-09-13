@@ -21,7 +21,7 @@ coverage:
     - name: gateway
       host: 127.0.0.1
       port: 6300
-    - name: std
+    - name: auth
       host: 127.0.0.1
       port: 6301
   reports:
@@ -30,14 +30,14 @@ coverage:
         - ian-ddd-gateway/gateway-app/target/classes
       source-directories:
         - ian-ddd-gateway/gateway-app/src/main/java
-    - name: std
+    - name: auth
       classes-directories:
-        - ian-ddd-archetype-std/ian-frame-archetype-std-trigger/target/classes
-        - ian-ddd-archetype-std/ian-frame-archetype-std-domain/target/classes
-        - ian-ddd-archetype-std/ian-frame-archetype-std-infrastructure/target/classes
-        - ian-ddd-archetype-std/ian-frame-archetype-std-api/target/classes
+        - ian-ddd-auth/ian-ddd-auth-trigger/target/classes
+        - ian-ddd-auth/ian-ddd-auth-domain/target/classes
+        - ian-ddd-auth/ian-ddd-auth-infrastructure/target/classes
+        - ian-ddd-api/ian-ddd-api-internal/target/classes
       source-directories:
-        - ian-ddd-archetype-std/ian-frame-archetype-std-trigger/src/main/java
-        - ian-ddd-archetype-std/ian-frame-archetype-std-domain/src/main/java
-        - ian-ddd-archetype-std/ian-frame-archetype-std-infrastructure/src/main/java
-        - ian-ddd-archetype-std/ian-frame-archetype-std-api/src/main/java
+        - ian-ddd-auth/ian-ddd-auth-trigger/src/main/java
+        - ian-ddd-auth/ian-ddd-auth-domain/src/main/java
+        - ian-ddd-auth/ian-ddd-auth-infrastructure/src/main/java
+        - ian-ddd-api/ian-ddd-api-internal/src/main/java

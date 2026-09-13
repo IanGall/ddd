@@ -20,7 +20,6 @@
     <properties>
         <ddd.base.version>1.0-SNAPSHOT</ddd.base.version>
         <ddd.coverage.version>1.0-SNAPSHOT</ddd.coverage.version>
-        <ian.std.version>1.0-SNAPSHOT</ian.std.version>
     </properties>
 
     <dependencyManagement>
@@ -36,11 +35,6 @@
                 <groupId>cn.iantech</groupId>
                 <artifactId>ian-ddd-gateway-core</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>cn.iantech</groupId>
-                <artifactId>ian-frame-archetype-std-api</artifactId>
-                <version>${ian.std.version}</version>
             </dependency>
             <dependency>
                 <groupId>cn.iantech</groupId>
