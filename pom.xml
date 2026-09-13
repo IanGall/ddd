@@ -12,10 +12,145 @@
     <name>ddd</name>
     <description>DDD 基座、共享 RPC 契约、网关与认证服务的聚合工程</description>
 
+    <!--
+      构建治理（编码/编译/依赖版本/Enforcer/Checkstyle）统一放在根聚合，供全部模块继承，
+      包括不继承 ddd-base 的契约模块（ian-ddd-api 及其子模块）。
+      JaCoCo 与覆盖率门槛刻意只由 ddd-base 定义，避免契约模块被 BUNDLE 60% 规则约束。
+    -->
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <skipTests>false</skipTests>
+        <spring.boot.version>4.1.0</spring.boot.version>
+        <mapstruct-plus.version>1.5.2</mapstruct-plus.version>
+        <dubbo.version>3.3.6</dubbo.version>
+        <mybatis.spring.boot.version>4.1.0</mybatis.spring.boot.version>
+        <redisson.version>4.7.0</redisson.version>
+        <yitter.idgenerator.version>1.0.6</yitter.idgenerator.version>
+        <fastjson2.version>2.0.64</fastjson2.version>
+        <gson.version>2.14.0</gson.version>
+        <error.prone.annotations.version>2.49.0</error.prone.annotations.version>
+        <netty.version>4.2.16.Final</netty.version>
+        <guava.version>33.6.0-jre</guava.version>
+        <nacos.version>3.2.3</nacos.version>
+        <shardingsphere.version>5.5.3</shardingsphere.version>
+        <xxl-job.version>3.4.2</xxl-job.version>
+        <datasource.proxy.version>1.10.1</datasource.proxy.version>
+        <lombok.version>1.18.46</lombok.version>
+        <lombok.mapstruct.binding.version>0.2.0</lombok.mapstruct.binding.version>
+        <junit.version>6.1.3</junit.version>
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+        <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
+        <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
+        <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
+        <maven.checkstyle.plugin.version>3.5.0</maven.checkstyle.plugin.version>
+        <!-- JaCoCo 版本：Shell 脚本统一读取仓库根目录的 .mvn/jacoco-version，升级时必须与此处同步修改 -->
+        <jacoco.version>0.8.13</jacoco.version>
+    </properties>
+
     <modules>
         <module>ddd-base</module>
         <module>ian-ddd-api</module>
         <module>ian-ddd-auth</module>
         <module>ian-ddd-gateway</module>
     </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven.compiler.plugin.version}</version>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                        <!-- Spring 6.1+ 通过参数名解析 @PathVariable/@RequestParam，必须保留方法参数名 -->
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven.surefire.plugin.version}</version>
+                    <configuration>
+                        <skipTests>${skipTests}</skipTests>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven.resources.plugin.version}</version>
+                    <configuration>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring.boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>${maven.checkstyle.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven.enforcer.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-build-environment</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,22)</version>
+                                    <message>本项目必须使用 Java 21 构建。</message>
+                                </requireJavaVersion>
+                                <dependencyConvergence/>
+                                <requireUpperBoundDeps/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-java-method-names</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                            <consoleOutput>true</consoleOutput>
+                            <failOnViolation>true</failOnViolation>
+                            <checkstyleRules>
+                                <module name="Checker">
+                                    <module name="TreeWalker">
+                                        <module name="MethodName">
+                                            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
+                                            <message key="name.invalidPattern"
+                                                     value="方法名 ''{0}'' 必须使用英文 lowerCamelCase 格式。"/>
+                                        </module>
+                                    </module>
+                                </module>
+                            </checkstyleRules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
