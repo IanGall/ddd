@@ -4,6 +4,7 @@ import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.auth.infra.IPasswordEncoder;
 import cn.iantech.domain.rbac.infra.*;
+import cn.iantech.domain.rbac.model.RbacPermissionCode;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.domain.rbac.model.entity.RbacPermissionEntity;
 import cn.iantech.domain.rbac.service.impl.RbacAccountService;
@@ -100,7 +101,9 @@ class RbacPermissionSecurityTest {
         accountService.createAccount("admin", "Pwd@0001", "管理员", "admin@test.com", "13800000000");
 
         ArgumentCaptor<RbacPermissionEntity> captor = ArgumentCaptor.forClass(RbacPermissionEntity.class);
-        verify(permissionRepository, Mockito.times(16)).save(ArgumentMatchers.eq(1L), captor.capture());
+        // 每个目录项应各写入一条系统内置权限；断言与目录长度绑定，避免新增权限码时漏改用例
+        verify(permissionRepository, Mockito.times(RbacPermissionCode.values().length))
+                .save(ArgumentMatchers.eq(1L), captor.capture());
         Assertions.assertTrue(captor.getAllValues().stream().allMatch(RbacPermissionEntity::getSystemManaged));
     }
 
