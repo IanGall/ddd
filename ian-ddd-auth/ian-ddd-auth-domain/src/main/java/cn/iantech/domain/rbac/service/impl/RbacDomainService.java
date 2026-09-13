@@ -6,7 +6,6 @@ import cn.iantech.domain.rbac.infra.*;
 import cn.iantech.domain.rbac.model.entity.RbacPermissionEntity;
 import cn.iantech.domain.rbac.model.entity.RbacRoleEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
-import cn.iantech.domain.rbac.service.IRbacDomainService;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -35,7 +34,7 @@ import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normaliz
 
 @RequiredArgsConstructor
 @Service
-public class RbacDomainService implements IRbacDomainService {
+public class RbacDomainService {
 
     private static final int MAX_PERMISSION_DEPTH = 64;
     private static final int MAX_USERNAME_LENGTH = 64;
@@ -58,7 +57,6 @@ public class RbacDomainService implements IRbacDomainService {
     private final IPasswordEncoder passwordEncoder;
     private final IRbacAccountRepository rbacAccountRepository;
 
-    @Override
     public RbacUserEntity createUser(Long accountId, String username, String rawPassword, String displayName, String email, String mobile, Boolean status) {
         checkAccountId(accountId);
         String finalUsername = StringUtils.trimToNull(username);
@@ -96,7 +94,6 @@ public class RbacDomainService implements IRbacDomainService {
         return savedEntity;
     }
 
-    @Override
     public RbacUserEntity queryUserById(Long accountId, Long id) {
         checkAccountId(accountId);
         checkUserId(id);
@@ -104,7 +101,6 @@ public class RbacDomainService implements IRbacDomainService {
                 .orElseThrow(() -> illegalParameter("用户不存在"));
     }
 
-    @Override
     public DomainPage<RbacUserEntity> queryUserPage(Long accountId, Integer pageNum, Integer pageSize, String username, Boolean status) {
         checkAccountId(accountId);
         Integer finalPageNum = normalizePageNum(pageNum);
@@ -121,7 +117,6 @@ public class RbacDomainService implements IRbacDomainService {
         return new DomainPage<>(total, finalPageNum, finalPageSize, userList);
     }
 
-    @Override
     public RbacUserEntity updateUser(Long accountId, Long id, String rawPassword, String displayName, String email, String mobile, Boolean status) {
         checkAccountId(accountId);
         checkUserId(id);
@@ -158,7 +153,6 @@ public class RbacDomainService implements IRbacDomainService {
         return queryUserById(accountId, id);
     }
 
-    @Override
     public boolean deleteUser(Long accountId, Long id) {
         checkAccountId(accountId);
         checkUserId(id);
@@ -170,7 +164,6 @@ public class RbacDomainService implements IRbacDomainService {
         return true;
     }
 
-    @Override
     public RbacRoleEntity createRole(Long accountId, String roleCode, String roleName, String roleDesc, Boolean status) {
         checkAccountId(accountId);
         String finalRoleCode = StringUtils.trimToNull(roleCode);
@@ -207,7 +200,6 @@ public class RbacDomainService implements IRbacDomainService {
         return savedEntity;
     }
 
-    @Override
     public RbacRoleEntity queryRoleById(Long accountId, Long id) {
         checkAccountId(accountId);
         checkRoleId(id);
@@ -215,7 +207,6 @@ public class RbacDomainService implements IRbacDomainService {
                 .orElseThrow(() -> illegalParameter("角色不存在"));
     }
 
-    @Override
     public DomainPage<RbacRoleEntity> queryRolePage(Long accountId, Integer pageNum, Integer pageSize, String roleCode, String roleName, Boolean status) {
         checkAccountId(accountId);
         Integer finalPageNum = normalizePageNum(pageNum);
@@ -233,7 +224,6 @@ public class RbacDomainService implements IRbacDomainService {
         return new DomainPage<>(total, finalPageNum, finalPageSize, list);
     }
 
-    @Override
     public RbacRoleEntity updateRole(Long accountId, Long id, String roleCode, String roleName, String roleDesc, Boolean status) {
         checkAccountId(accountId);
         checkRoleId(id);
@@ -286,7 +276,6 @@ public class RbacDomainService implements IRbacDomainService {
         return queryRoleById(accountId, id);
     }
 
-    @Override
     public boolean deleteRole(Long accountId, Long id) {
         checkAccountId(accountId);
         checkRoleId(id);
@@ -299,7 +288,6 @@ public class RbacDomainService implements IRbacDomainService {
         return true;
     }
 
-    @Override
     public RbacPermissionEntity createPermission(Long accountId, String permCode, String permName, Integer permType, Long parentId, String path, String method, Boolean status) {
         checkAccountId(accountId);
         String finalPermCode = StringUtils.trimToNull(permCode);
@@ -348,7 +336,6 @@ public class RbacDomainService implements IRbacDomainService {
         return savedEntity;
     }
 
-    @Override
     public RbacPermissionEntity queryPermissionById(Long accountId, Long id) {
         checkAccountId(accountId);
         checkPermissionId(id);
@@ -356,7 +343,6 @@ public class RbacDomainService implements IRbacDomainService {
                 .orElseThrow(() -> illegalParameter("权限不存在"));
     }
 
-    @Override
     public DomainPage<RbacPermissionEntity> queryPermissionPage(Long accountId, Integer pageNum, Integer pageSize, String permCode, String permName, Integer permType, Long parentId, Boolean status) {
         checkAccountId(accountId);
         Integer finalPageNum = normalizePageNum(pageNum);
@@ -387,7 +373,6 @@ public class RbacDomainService implements IRbacDomainService {
         return new DomainPage<>(total, finalPageNum, finalPageSize, list);
     }
 
-    @Override
     public RbacPermissionEntity updatePermission(Long accountId, Long id, String permName, Integer permType, Long parentId, String path, String method, Boolean status) {
         checkAccountId(accountId);
         checkPermissionId(id);
@@ -439,7 +424,6 @@ public class RbacDomainService implements IRbacDomainService {
         return queryPermissionById(accountId, id);
     }
 
-    @Override
     public boolean deletePermission(Long accountId, Long id) {
         checkAccountId(accountId);
         checkPermissionId(id);
@@ -453,7 +437,6 @@ public class RbacDomainService implements IRbacDomainService {
         return true;
     }
 
-    @Override
     public boolean replaceUserRoles(Long accountId, Long userId, List<Long> roleIds) {
         checkAccountId(accountId);
         checkUserId(userId);
@@ -486,7 +469,6 @@ public class RbacDomainService implements IRbacDomainService {
         return true;
     }
 
-    @Override
     public boolean replaceRolePermissions(Long accountId, Long roleId, List<Long> permissionIds) {
         checkAccountId(accountId);
         checkRoleId(roleId);
@@ -519,7 +501,6 @@ public class RbacDomainService implements IRbacDomainService {
         return true;
     }
 
-    @Override
     public List<Long> queryUserRoleIds(Long accountId, Long userId) {
         checkAccountId(accountId);
         checkUserId(userId);
@@ -537,7 +518,6 @@ public class RbacDomainService implements IRbacDomainService {
                 .toList();
     }
 
-    @Override
     public List<Long> queryRolePermissionIds(Long accountId, Long roleId) {
         checkAccountId(accountId);
         checkRoleId(roleId);

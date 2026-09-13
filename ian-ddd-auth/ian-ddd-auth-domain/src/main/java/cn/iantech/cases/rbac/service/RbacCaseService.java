@@ -8,9 +8,9 @@ import cn.iantech.domain.rbac.model.RbacPermissionCode;
 import cn.iantech.domain.rbac.model.entity.RbacPermissionEntity;
 import cn.iantech.domain.rbac.model.entity.RbacRoleEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
-import cn.iantech.domain.rbac.service.IRbacAccessControlService;
-import cn.iantech.domain.rbac.service.IRbacDomainService;
+import cn.iantech.domain.rbac.service.impl.RbacAccessControlService;
 import cn.iantech.domain.rbac.service.impl.RbacAccountService;
+import cn.iantech.domain.rbac.service.impl.RbacDomainService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,9 +28,9 @@ import static cn.iantech.cases.rbac.model.RbacCaseCommands.*;
 @RequiredArgsConstructor
 @Slf4j
 public class RbacCaseService {
-    private final IRbacDomainService rbacDomainService;
+    private final RbacDomainService rbacDomainService;
     private final RbacAccountService accountService;
-    private final IRbacAccessControlService accessControlService;
+    private final RbacAccessControlService accessControlService;
 
     @Transactional(rollbackFor = Exception.class)
     public AccountResult createAccount(CreateAccount command) {

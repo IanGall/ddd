@@ -4,8 +4,8 @@ import cn.iantech.cases.channel.model.ChannelCaseModels.ReplaceDataScopes;
 import cn.iantech.cases.model.Actor;
 import cn.iantech.domain.channel.infra.IChannelDataScopeRepository;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
-import cn.iantech.domain.channel.service.IChannelCredentialDomainService;
-import cn.iantech.domain.rbac.service.IRbacAccessControlService;
+import cn.iantech.domain.channel.service.impl.ChannelCredentialDomainService;
+import cn.iantech.domain.rbac.service.impl.RbacAccessControlService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -69,15 +69,15 @@ class ChannelCredentialCaseTransactionTest {
         }
 
         @Bean
-        IChannelCredentialDomainService domainService() {
-            IChannelCredentialDomainService service = mock(IChannelCredentialDomainService.class);
+        ChannelCredentialDomainService domainService() {
+            ChannelCredentialDomainService service = mock(ChannelCredentialDomainService.class);
             when(service.queryById(1L)).thenReturn(ChannelCredentialEntity.builder().id(1L).build());
             return service;
         }
 
         @Bean
-        IRbacAccessControlService accessControlService() {
-            return mock(IRbacAccessControlService.class);
+        RbacAccessControlService accessControlService() {
+            return mock(RbacAccessControlService.class);
         }
 
         @Bean
@@ -88,8 +88,8 @@ class ChannelCredentialCaseTransactionTest {
         }
 
         @Bean
-        ChannelCredentialCaseService caseService(IChannelCredentialDomainService domainService,
-                                                 IRbacAccessControlService accessControlService,
+        ChannelCredentialCaseService caseService(ChannelCredentialDomainService domainService,
+                                                 RbacAccessControlService accessControlService,
                                                  IChannelDataScopeRepository dataScopeRepository) {
             return new ChannelCredentialCaseService(domainService, accessControlService, dataScopeRepository);
         }

@@ -9,9 +9,9 @@ import cn.iantech.domain.channel.infra.IChannelDataScopeRepository;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
 import cn.iantech.domain.channel.model.ChannelDataScope;
 import cn.iantech.domain.channel.model.IssuedChannelCredential;
-import cn.iantech.domain.channel.service.IChannelCredentialDomainService;
+import cn.iantech.domain.channel.service.impl.ChannelCredentialDomainService;
 import cn.iantech.domain.model.DomainPage;
-import cn.iantech.domain.rbac.service.IRbacAccessControlService;
+import cn.iantech.domain.rbac.service.impl.RbacAccessControlService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,8 +31,8 @@ import java.util.Set;
 public class ChannelCredentialCaseService {
     private static final Set<String> SCOPE_TYPES = Set.of("ACCOUNT", "TENANT", "STORE");
 
-    private final IChannelCredentialDomainService domainService;
-    private final IRbacAccessControlService accessControlService;
+    private final ChannelCredentialDomainService domainService;
+    private final RbacAccessControlService accessControlService;
     private final IChannelDataScopeRepository dataScopeRepository;
 
     @Transactional(rollbackFor = Exception.class)

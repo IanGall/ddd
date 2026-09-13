@@ -7,7 +7,6 @@ import cn.iantech.domain.rbac.infra.IRbacAuthorizationRepository;
 import cn.iantech.domain.rbac.infra.IRbacPermissionRepository;
 import cn.iantech.domain.rbac.infra.IRbacRoleRepository;
 import cn.iantech.domain.rbac.model.RbacPermissionCode;
-import cn.iantech.domain.rbac.service.IRbacAccessControlService;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -21,14 +20,17 @@ import java.util.Set;
  */
 @RequiredArgsConstructor
 @Service
-public class RbacAccessControlService implements IRbacAccessControlService {
+public class RbacAccessControlService {
 
     private final IRbacAccountRepository accountRepository;
     private final IRbacAuthorizationRepository authorizationRepository;
     private final IRbacPermissionRepository permissionRepository;
     private final IRbacRoleRepository roleRepository;
 
-    @Override
+    public void authorize(Long accountId, Long userId, String principalName, RbacPermissionCode permissionCode) {
+        authorize(accountId, userId, principalName, permissionCode == null ? null : permissionCode.getCode());
+    }
+
     public void authorize(Long accountId, Long userId, String principalName, String permissionCode) {
         if (accountId == null || accountId <= 0 || userId == null || userId <= 0
                 || StringUtils.isBlank(principalName) || StringUtils.isBlank(permissionCode)) {
@@ -44,7 +46,6 @@ public class RbacAccessControlService implements IRbacAccessControlService {
         }
     }
 
-    @Override
     public void authorizeRoleGrant(Long accountId, Long userId, String principalName, List<Long> roleIds) {
         authorize(accountId, userId, principalName, RbacPermissionCode.USER_ROLE_GRANT);
         if (isPrimaryAccount(accountId, userId, principalName) || roleIds == null || roleIds.isEmpty()) {
@@ -62,7 +63,6 @@ public class RbacAccessControlService implements IRbacAccessControlService {
         }
     }
 
-    @Override
     public void authorizePermissionGrant(Long accountId, Long userId, String principalName, List<Long> permissionIds) {
         authorize(accountId, userId, principalName, RbacPermissionCode.ROLE_PERMISSION_GRANT);
         if (isPrimaryAccount(accountId, userId, principalName) || permissionIds == null || permissionIds.isEmpty()) {
@@ -80,7 +80,6 @@ public class RbacAccessControlService implements IRbacAccessControlService {
         }
     }
 
-    @Override
     public void authorizePermissionManagement(Long accountId, Long userId, String principalName, Long permissionId) {
         if (accountRepository.findById(accountId).isEmpty()) {
             throw unauthorized();

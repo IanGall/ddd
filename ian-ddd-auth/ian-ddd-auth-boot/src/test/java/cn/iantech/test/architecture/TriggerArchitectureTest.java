@@ -24,6 +24,13 @@ class TriggerArchitectureTest {
             "cn.iantech.api.", "cn.iantech.context.", "cn.iantech.trigger.", "cn.iantech.infrastructure.",
             "org.apache.dubbo.", "org.mybatis.", "org.redisson.", "jakarta.servlet.", "javax.servlet.",
             "org.springframework.");
+    /**
+     * 领域服务默认应为具体类：接口只服务于跨模块端口/SPI（如 infra 契约）。
+     * 下列身份认证接口是唯一豁免，理由见 docs/plans/project-optimization-plan.md 阶段 F（测试替身实现该接口）。
+     */
+    private static final List<String> DOMAIN_SERVICE_INTERFACE_ALLOWLIST = List.of(
+            "auth/service/IAdminIdentityAuthenticator.java",
+            "auth/service/ICustomerIdentityAuthenticator.java");
 
     @Test
     void shouldOnlyInjectDomainOrCasesBusinessServicesIntoTrigger() {
@@ -54,6 +61,24 @@ class TriggerArchitectureTest {
 
             Assertions.assertTrue(obsoletePackages.isEmpty(),
                     () -> "Domain 基础设施契约必须统一放入 infra 包: " + obsoletePackages);
+        }
+    }
+
+    @Test
+    void shouldNotDeclareInterfacesForSameModuleDomainServices() throws IOException {
+        Path sourceRoot = projectRoot().resolve("ian-ddd-auth-domain/src/main/java/cn/iantech/domain");
+        try (Stream<Path> files = Files.walk(sourceRoot)) {
+            List<String> serviceInterfaces = files
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> path.getFileName().toString().startsWith("I"))
+                    .filter(path -> path.toString().contains("/service/"))
+                    .map(path -> sourceRoot.relativize(path).toString().replace('\\', '/'))
+                    .filter(relative -> !DOMAIN_SERVICE_INTERFACE_ALLOWLIST.contains(relative))
+                    .toList();
+
+            Assertions.assertTrue(serviceInterfaces.isEmpty(),
+                    () -> "领域服务应为具体类，接口只服务于跨模块端口/SPI；请勿在 service 包新增接口: "
+                            + serviceInterfaces);
         }
     }
 

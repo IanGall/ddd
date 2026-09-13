@@ -8,10 +8,12 @@ import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Locale;
 
+@Service
 @RequiredArgsConstructor
 public class CustomerIdentityAuthenticator implements ICustomerIdentityAuthenticator {
 

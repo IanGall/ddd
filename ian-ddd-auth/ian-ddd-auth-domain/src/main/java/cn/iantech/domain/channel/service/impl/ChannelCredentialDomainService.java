@@ -7,7 +7,6 @@ import cn.iantech.domain.channel.infra.IChannelCredentialRepository;
 import cn.iantech.domain.channel.infra.IChannelSecretCipher;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
 import cn.iantech.domain.channel.model.IssuedChannelCredential;
-import cn.iantech.domain.channel.service.IChannelCredentialDomainService;
 import cn.iantech.domain.model.DomainPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,7 @@ import java.util.stream.IntStream;
 
 @RequiredArgsConstructor
 @Service
-public class ChannelCredentialDomainService implements IChannelCredentialDomainService {
+public class ChannelCredentialDomainService {
     private static final int SECRET_BYTES = 32;
     private static final int CODE_BYTES = 16;
     private static final int MAX_CREATE_ATTEMPTS = 8;
@@ -28,7 +27,6 @@ public class ChannelCredentialDomainService implements IChannelCredentialDomainS
     private final IChannelSecretCipher secretCipher;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    @Override
     public IssuedChannelCredential create(Long userId, String channelName) {
         requirePositive(userId, "用户无效");
         String normalizedName = requireName(channelName);
@@ -45,7 +43,6 @@ public class ChannelCredentialDomainService implements IChannelCredentialDomainS
         return new IssuedChannelCredential(entity, secret);
     }
 
-    @Override
     public DomainPage<ChannelCredentialEntity> queryPage(int pageNum, int pageSize,
                                            String channelCode, String channelName, Boolean status) {
         int normalizedPage = Math.max(pageNum, 1);
@@ -56,19 +53,16 @@ public class ChannelCredentialDomainService implements IChannelCredentialDomainS
         return new DomainPage<>(total, normalizedPage, normalizedSize, list);
     }
 
-    @Override
     public ChannelCredentialEntity queryById(Long id) {
         return repository.findById(id).orElseThrow(this::notFound);
     }
 
-    @Override
     public ChannelCredentialEntity update(Long userId, Long id, String channelName) {
         queryById(id);
         if (repository.updateName(id, requireName(channelName), userId) != 1) throw conflict();
         return queryById(id);
     }
 
-    @Override
     public ChannelCredentialEntity updateStatus(Long userId, Long id, Boolean status) {
         queryById(id);
         if (status == null) throw invalid("状态不能为空");
@@ -76,7 +70,6 @@ public class ChannelCredentialDomainService implements IChannelCredentialDomainS
         return queryById(id);
     }
 
-    @Override
     public IssuedChannelCredential rotateSecret(Long userId, Long id) {
         ChannelCredentialEntity current = queryById(id);
         long nextVersion = current.getSecretVersion() + 1;
@@ -89,7 +82,6 @@ public class ChannelCredentialDomainService implements IChannelCredentialDomainS
         return new IssuedChannelCredential(queryById(id), secret);
     }
 
-    @Override
     public boolean delete(Long userId, Long id) {
         queryById(id);
         return repository.logicDelete(id, userId) == 1;

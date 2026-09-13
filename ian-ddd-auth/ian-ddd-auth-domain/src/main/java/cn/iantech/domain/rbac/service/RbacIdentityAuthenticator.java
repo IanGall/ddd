@@ -10,6 +10,7 @@ import cn.iantech.domain.rbac.infra.IRbacUserRepository;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.regex.Matcher;
@@ -18,6 +19,7 @@ import java.util.regex.Pattern;
 /**
  * 解析账号化登录名并认证主账号或子账号。
  */
+@Service
 public class RbacIdentityAuthenticator implements IAdminIdentityAuthenticator {
 
     public static final String PRIMARY_USER_TYPE = AuthUserTypes.PRIMARY;
