@@ -173,7 +173,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>cn.iantech.IanFrameArchetypeStdApplication</mainClass>
+                    <mainClass>cn.iantech.IanDddAuthApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

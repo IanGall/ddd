@@ -1,6 +1,6 @@
 package cn.iantech.test.rbac;
 
-import cn.iantech.IanFrameArchetypeStdApplication;
+import cn.iantech.IanDddAuthApplication;
 import cn.iantech.api.IAuthService;
 import cn.iantech.api.IRbacService;
 import cn.iantech.api.model.auth.AuthLoginReq;
@@ -37,7 +37,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
-@SpringBootTest(classes = IanFrameArchetypeStdApplication.class)
+@SpringBootTest(classes = IanDddAuthApplication.class)
 @ActiveProfiles("rbac-mysql-test")
 @EnabledIfEnvironmentVariable(named = "RUN_RBAC_MYSQL_TESTS", matches = "true")
 @Import(RbacServiceMysqlTest.RbacServiceTestConfiguration.class)

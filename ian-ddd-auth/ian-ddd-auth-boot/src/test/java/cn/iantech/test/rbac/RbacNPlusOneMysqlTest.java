@@ -1,6 +1,6 @@
 package cn.iantech.test.rbac;
 
-import cn.iantech.IanFrameArchetypeStdApplication;
+import cn.iantech.IanDddAuthApplication;
 import cn.iantech.api.IRbacService;
 import cn.iantech.api.model.rbac.CreateRbacPermissionReq;
 import cn.iantech.api.model.rbac.QueryRbacUserPageReq;
@@ -40,7 +40,7 @@ import java.util.stream.IntStream;
  * 断言分两层：{@code maxRepeatedSelects} 默认 1 拦截「逐元素重复同一语句」的典型 N+1；
  * {@code maxSelects} 锁定单次调用的查询总数，拦截查询数随数据量放大的实现。</p>
  */
-@SpringBootTest(classes = IanFrameArchetypeStdApplication.class)
+@SpringBootTest(classes = IanDddAuthApplication.class)
 @ActiveProfiles("rbac-mysql-test")
 @EnabledIfEnvironmentVariable(named = "RUN_RBAC_MYSQL_TESTS", matches = "true")
 @Import(RbacNPlusOneMysqlTest.NPlusOneTestConfiguration.class)
