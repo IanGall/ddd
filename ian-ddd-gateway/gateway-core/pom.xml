@@ -30,7 +30,7 @@
         </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>
-            <artifactId>ian-ddd-api-internal</artifactId>
+            <artifactId>ian-ddd-auth-api</artifactId>
         </dependency>
         <dependency>
             <groupId>cn.iantech</groupId>

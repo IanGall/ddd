@@ -67,7 +67,7 @@
             <!-- 服务 API 契约（聚合 ian-ddd-api 下按内外分类的子模块），独立于具体服务实现 -->
             <dependency>
                 <groupId>cn.iantech</groupId>
-                <artifactId>ian-ddd-api-internal</artifactId>
+                <artifactId>ian-ddd-auth-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

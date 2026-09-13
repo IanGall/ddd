@@ -35,9 +35,9 @@ coverage:
         - ian-ddd-auth/ian-ddd-auth-trigger/target/classes
         - ian-ddd-auth/ian-ddd-auth-domain/target/classes
         - ian-ddd-auth/ian-ddd-auth-infrastructure/target/classes
-        - ian-ddd-api/ian-ddd-api-internal/target/classes
+        - ian-ddd-api/ian-ddd-api-internal/ian-ddd-auth-api/target/classes
       source-directories:
         - ian-ddd-auth/ian-ddd-auth-trigger/src/main/java
         - ian-ddd-auth/ian-ddd-auth-domain/src/main/java
         - ian-ddd-auth/ian-ddd-auth-infrastructure/src/main/java
-        - ian-ddd-api/ian-ddd-api-internal/src/main/java
+        - ian-ddd-api/ian-ddd-api-internal/ian-ddd-auth-api/src/main/java

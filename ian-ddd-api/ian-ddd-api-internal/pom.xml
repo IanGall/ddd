@@ -12,29 +12,13 @@
     </parent>
 
     <artifactId>ian-ddd-api-internal</artifactId>
+    <packaging>pom</packaging>
     <name>ian-ddd-api-internal</name>
-    <description>认证服务（ian-ddd-auth）的 RPC 契约：Auth / RBAC / Customer / Channel 接口与传输 DTO</description>
+    <description>内部 API 聚合：服务间 Dubbo RPC 契约，按服务分子模块（&lt;service&gt;-api）</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>cn.iantech</groupId>
-            <artifactId>ddd-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <finalName>ian-ddd-api-internal</finalName>
-    </build>
+    <modules>
+        <!-- 一个服务一个内部契约子模块；新增服务时在此追加 -->
+        <module>ian-ddd-auth-api</module>
+    </modules>
 
 </project>

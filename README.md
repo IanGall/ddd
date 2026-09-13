@@ -17,9 +17,10 @@ ddd/
 │   ├── ddd-dependencies/          # 第三方依赖版本 BOM
 │   ├── ddd-base-bom/              # 汇总 BOM（第三方 + 基础组件 + 契约版本）
 │   └── ian-ddd-coverage/          # 分布式 E2E 覆盖率基础设施
-├── ian-ddd-api/                   # API 契约聚合工程（按内部/外部拆子模块，独立于服务实现）
-│   ├── ian-ddd-api-internal/      #   内部：服务间 Dubbo RPC 契约（Auth / RBAC / Customer / Channel）
-│   └── ian-ddd-api-external/      #   外部：对外/第三方 HTTP 契约（声明式 @HttpExchange）
+├── ian-ddd-api/                   # API 契约聚合工程（按内部/外部分类，独立于服务实现）
+│   ├── ian-ddd-api-internal/      #   内部 API 分类聚合：按服务下挂 <service>-api
+│   │   └── ian-ddd-auth-api/      #     认证服务的 Dubbo RPC 契约（Auth / RBAC / Customer / Channel）
+│   └── ian-ddd-api-external/      #   外部 API：对外/第三方 HTTP 契约（声明式 @HttpExchange）
 ├── ian-ddd-auth/                  # 认证服务实现：Auth / RBAC / Customer / Channel（HTTP 8091）
 └── ian-ddd-gateway/               # 网关参考应用：HTTP 接入 + Dubbo 消费端（HTTP 8092）
 ```

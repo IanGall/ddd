@@ -1,8 +1,8 @@
 # API 契约聚合工程协作说明
 
 ## 模块定位
-- 本目录是 **API 契约聚合工程**（`packaging=pom`），按「内部 / 外部」拆分子模块：
-  - `ian-ddd-api-internal`：服务间 **Dubbo RPC** 契约（`cn.iantech.api.*`）。
+- 本目录是 **API 契约聚合工程**（`packaging=pom`），按「内部 / 外部」分类、再按服务拆子模块：
+  - `ian-ddd-api-internal`：内部 API 分类聚合，下挂 `<service>-api`（当前 `ian-ddd-auth-api`），服务间 **Dubbo RPC** 契约（`cn.iantech.api.*`）。
   - `ian-ddd-api-external`：对外/第三方 **HTTP** 契约（`cn.iantech.api.external.*`，Spring 声明式 `@HttpExchange`）。
 - 契约独立于任何服务实现；服务实现、网关与骨架消费这些契约，不各自复制。
 

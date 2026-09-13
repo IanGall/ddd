@@ -10,7 +10,7 @@
 
 ## 协作约束
 
-- 分层职责清晰：`boot/domain/infrastructure/trigger` 各司其职，公共基础能力统一复用 `ddd-common`；对外 RPC 契约统一使用共享制品 `ian-ddd-api-internal`（本工程不再自带 `api` 模块）。
+- 分层职责清晰：`boot/domain/infrastructure/trigger` 各司其职，公共基础能力统一复用 `ddd-common`；对外 RPC 契约统一使用共享制品 `ian-ddd-auth-api`（本工程不再自带 `api` 模块）。
 - RBAC 数据按主账号 `account_id` 隔离；Cases 完成主账号/子账号权限授权，Infrastructure 的每条 SQL 都必须带账号条件。
 - 旧租户表和管理员专用认证不保留兼容层，模板生成结果必须直接采用主账号/子账号模型。
 - 删除无用配置与废弃文件，避免冗余。

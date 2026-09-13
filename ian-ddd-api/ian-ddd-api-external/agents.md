@@ -1,7 +1,7 @@
 # ian-ddd-api-external 协作说明
 
 ## 模块定位
-- 描述**对外/第三方服务**的 HTTP 调用契约，与内部 Dubbo RPC 契约（`ian-ddd-api-internal`）分开。
+- 描述**对外/第三方服务**的 HTTP 调用契约，与内部 Dubbo RPC 契约（`ian-ddd-api-internal` 下的 `ian-ddd-auth-api`）分开。
 - 使用 Spring 声明式 HTTP 接口：`@HttpExchange` + `@GetExchange`/`@PostExchange`…，由 `HttpServiceProxyFactory` + `RestClient` 生成代理。
 
 ## 变更边界

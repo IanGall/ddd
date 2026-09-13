@@ -106,7 +106,7 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$(detect_workspace_root || true)}"
 DDD_BASE_DIR="${WORKSPACE_DIR}/ddd-base"
 GATEWAY_DIR="${WORKSPACE_DIR}/ian-ddd-gateway"
 AUTH_DIR="${WORKSPACE_DIR}/ian-ddd-auth"
-API_INTERNAL_DIR="${WORKSPACE_DIR}/ian-ddd-api/ian-ddd-api-internal"
+AUTH_API_DIR="${WORKSPACE_DIR}/ian-ddd-api/ian-ddd-api-internal/ian-ddd-auth-api"
 
 CONTROLLER_PORT="${CONTROLLER_PORT:-8099}"
 GATEWAY_PORT="${GATEWAY_PORT:-8092}"
@@ -335,7 +335,7 @@ preflight() {
         "${AUTH_DIR}/ian-ddd-auth-trigger/target/classes" \
         "${AUTH_DIR}/ian-ddd-auth-domain/target/classes" \
         "${AUTH_DIR}/ian-ddd-auth-infrastructure/target/classes" \
-        "${API_INTERNAL_DIR}/target/classes"; do
+        "${AUTH_API_DIR}/target/classes"; do
         [[ -d "${dir}" ]] || missing+=("${dir}")
     done
 
