@@ -602,6 +602,10 @@ merge_sessions() {
     echo "======================================================================"
     if awk -v r="${ratio}" -v min="${COVERAGE_MIN_RATIO:-40}" 'BEGIN { exit !(r < min) }'; then
         warn "并集行覆盖率低于目标 ${COVERAGE_MIN_RATIO:-40}%，请补充 E2E 用例（目标可用 COVERAGE_MIN_RATIO 调整）"
+        # 专用流水线可设 COVERAGE_MIN_RATIO_STRICT=true，把目标变成强制下限；默认仅告警，不阻塞本地联调
+        if [[ "${COVERAGE_MIN_RATIO_STRICT:-false}" == "true" ]]; then
+            fail "COVERAGE_MIN_RATIO_STRICT=true：并集行覆盖率 ${ratio}% 低于 ${COVERAGE_MIN_RATIO:-40}%，判定失败"
+        fi
     fi
     prune_sessions
 }

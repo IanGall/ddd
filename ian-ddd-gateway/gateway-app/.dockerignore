@@ -1,0 +1,2 @@
+# 构建上下文剔除项：保留 target/（Dockerfile 需要 COPY 产物），仅排除本地运行日志
+data/
