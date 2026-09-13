@@ -111,4 +111,23 @@ class AppAuthE2eTest {
         assertEquals(401, CoverageE2eSupport.get("/api/app/auth/sessions", null)
                 .expectStatus(401).status());
     }
+
+    @Test
+    void shouldLogoutAllCustomerSessions() {
+        String loginName = "e2eapp" + CoverageE2eSupport.uniqueSuffix();
+        String password = "E2e@12345" + CoverageE2eSupport.uniqueSuffix();
+        CoverageE2eSupport.post("/api/app/auth/register", """
+                {"loginName":"%s","password":"%s"}""".formatted(loginName, password)).data();
+
+        Tokens first = appLogin(loginName, password);
+        Tokens second = appLogin(loginName, password);
+        assertNotEquals(first.sessionId(), second.sessionId());
+
+        // 全量注销后，同一用户的所有会话令牌都必须失效
+        CoverageE2eSupport.post("/api/app/auth/logout-all", null, first.accessToken()).data();
+        assertEquals(401, CoverageE2eSupport.get("/api/app/auth/sessions", first.accessToken())
+                .expectStatus(401).status());
+        assertEquals(401, CoverageE2eSupport.get("/api/app/auth/sessions", second.accessToken())
+                .expectStatus(401).status());
+    }
 }
