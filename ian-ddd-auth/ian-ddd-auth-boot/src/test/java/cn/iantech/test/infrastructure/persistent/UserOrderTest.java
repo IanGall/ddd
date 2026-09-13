@@ -15,7 +15,9 @@ import org.springframework.test.context.ActiveProfiles;
 import jakarta.annotation.Resource;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -47,13 +49,16 @@ public class UserOrderTest {
         Assertions.assertEquals(bo.getTotalAmount(), po.getTotalAmount());
     }
 
-    // 验证批量新增用户订单
+    // 验证批量新增用户订单，并读回校验分片路由落库成功
     @Test
     public void shouldInsertUserOrders() {
+        String lastUserId = null;
         for (int i = 0; i < 10; i++) {
+            String userId = "ian_" + RandomStringUtils.randomAlphabetic(6);
+            lastUserId = userId;
             UserOrderPO userOrderPO = UserOrderPO.builder()
                     .userName("测试用户")
-                    .userId("ian_" + RandomStringUtils.randomAlphabetic(6))
+                    .userId(userId)
                     .userMobile("+86 13800000000")
                     .sku("SKU-100001")
                     .skuName("示例商品")
@@ -74,6 +79,11 @@ public class UserOrderTest {
 
             userOrderDao.insert(userOrderPO);
         }
+
+        List<UserOrderPO> persisted = userOrderDao.selectByUserId(lastUserId);
+        Assertions.assertFalse(persisted.isEmpty(), "插入后应能按 userId 路由查询到订单");
+        Assertions.assertEquals("SKU-100001", persisted.getFirst().getSku());
+        Assertions.assertEquals(lastUserId, persisted.getFirst().getUserId());
     }
 
     // 验证持久化对象能够转换为领域对象
@@ -95,14 +105,29 @@ public class UserOrderTest {
     }
 
     /**
-     * 路由测试
-    */
+     * 路由测试：校验分片表达式对 userId 的映射具备确定性与合法范围，并覆盖全部库与表。
+     * 与 {@code sharding/sharding-jdbc-dev.yaml} 中的 INLINE 表达式保持一致。
+     */
     @Test
     public void shouldRouteByUserIdHash() {
-        for (int i = 0; i < 50; i++) {
-            String user_id = "ian_" + RandomStringUtils.randomAlphabetic(6);
-            log.info("测试结果 {}", (user_id.hashCode() ^ (user_id.hashCode()) >>> 16) & 3);
+        Set<Integer> databaseIndexes = new HashSet<>();
+        Set<Integer> tableIndexes = new HashSet<>();
+        for (int i = 0; i < 200; i++) {
+            String userId = "ian_" + RandomStringUtils.randomAlphabetic(6);
+            int databaseIndex = Math.abs(userId.hashCode()) % 2;
+            int tableIndex = (userId.hashCode() ^ (userId.hashCode() >>> 16)) & 3;
+
+            Assertions.assertTrue(databaseIndex >= 0 && databaseIndex < 2, "库下标必须落在 0..1");
+            Assertions.assertTrue(tableIndex >= 0 && tableIndex < 4, "表下标必须落在 0..3");
+            // 同一 userId 重复计算必须得到同一路由，避免非确定性分片
+            Assertions.assertEquals(databaseIndex, Math.abs(userId.hashCode()) % 2);
+
+            databaseIndexes.add(databaseIndex);
+            tableIndexes.add(tableIndex);
         }
+
+        Assertions.assertEquals(Set.of(0, 1), databaseIndexes, "200 个随机 userId 应覆盖两个库");
+        Assertions.assertEquals(4, tableIndexes.size(), "200 个随机 userId 应覆盖四张分表");
     }
 
 }
