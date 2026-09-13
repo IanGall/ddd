@@ -4,7 +4,6 @@ import cn.iantech.domain.user.model.entity.UserOrderBO;
 import cn.iantech.infrastructure.persistent.dao.IUserOrderDao;
 import cn.iantech.infrastructure.persistent.po.UserOrderPO;
 import io.github.linpeilie.Converter;
-import io.github.linpeilie.DefaultConverterFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -87,9 +86,7 @@ public class UserOrderTest {
                 .totalAmount(BigDecimal.valueOf(88.90))
                 .build();
 
-        Converter converter = new Converter(new DefaultConverterFactory());
         UserOrderBO bo = converter.convert(po, UserOrderBO.class);
-
         Assertions.assertNotNull(bo);
         Assertions.assertEquals(po.getUserId(), bo.getUserId());
         Assertions.assertEquals(po.getSku(), bo.getSku());

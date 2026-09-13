@@ -9,6 +9,7 @@ import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.rpc.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -176,6 +177,30 @@ class DubboContextFilterTest {
         }
 
         assertFalse(ContextAccessor.current().isPresent());
+    }
+
+    // 验证提供端把请求号写入日志 MDC，并在调用结束后清理
+    @Test
+    void shouldBindTraceIdToMdcDuringProviderInvocation() {
+        RpcContext.getServerAttachment().setAttachment(ContextKeys.REQUEST_ID, "trace-9");
+        AtomicReference<String> duringCall = new AtomicReference<>();
+
+        new DubboContextProviderFilter().invoke(new CapturingInvoker(current ->
+                duringCall.set(MDC.get(ContextKeys.TRACE_ID))), invocation);
+
+        assertEquals("trace-9", duringCall.get());
+        assertNull(MDC.get(ContextKeys.TRACE_ID));
+    }
+
+    // 验证提供端无请求号时不写入日志 MDC
+    @Test
+    void shouldNotBindMdcWhenProviderHasNoRequestId() {
+        AtomicBoolean mdcPresent = new AtomicBoolean(true);
+
+        new DubboContextProviderFilter().invoke(new CapturingInvoker(current ->
+                mdcPresent.set(MDC.get(ContextKeys.TRACE_ID) != null)), invocation);
+
+        assertFalse(mdcPresent.get());
     }
 
     private static RequestContext context(

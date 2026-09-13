@@ -1,6 +1,7 @@
 package cn.iantech.context.web;
 
 import cn.iantech.context.core.ContextAccessor;
+import cn.iantech.context.core.ContextKeys;
 import cn.iantech.context.core.ContextScope;
 import cn.iantech.context.core.ContextValidator;
 import cn.iantech.context.core.RequestContext;
@@ -8,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -55,9 +57,12 @@ public final class ContextWebFilter extends OncePerRequestFilter {
                 resolved.authorizedScope(),
                 resolved.credentialVersion());
 
+        MDC.put(ContextKeys.TRACE_ID, requestId);
         try (ContextScope ignored = ContextAccessor.open(context)) {
             response.setHeader(REQUEST_ID_HEADER, requestId);
             filterChain.doFilter(request, response);
+        } finally {
+            MDC.remove(ContextKeys.TRACE_ID);
         }
     }
 

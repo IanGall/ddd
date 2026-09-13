@@ -1,1 +1,3 @@
 **/target/
+# 运行期日志产物（由 logback 写入 ./data/log），不入库
+gateway-app/data/**

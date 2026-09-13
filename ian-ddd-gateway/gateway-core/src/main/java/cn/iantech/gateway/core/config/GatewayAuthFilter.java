@@ -6,6 +6,7 @@ import cn.iantech.api.model.channel.ChannelSignatureVerifyReq;
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.context.core.ContextAccessor;
+import cn.iantech.context.core.ContextKeys;
 import cn.iantech.context.core.ContextScope;
 import cn.iantech.context.core.ContextValidator;
 import cn.iantech.context.core.RequestContext;
@@ -14,6 +15,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
@@ -54,13 +56,19 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String requestId = validOrGenerate(request.getHeader(REQUEST_ID_HEADER));
         response.setHeader(REQUEST_ID_HEADER, requestId);
-        RouteKind routeKind = classifyRoute(request);
-        switch (routeKind) {
-            case ANONYMOUS, PLATFORM, ACTUATOR -> continueAnonymous(request, response, filterChain, requestId);
-            case ADMIN, APP -> authenticateBearer(request, response, filterChain, requestId, routeKind);
-            case EXTERNAL -> authenticateExternal(request, response, filterChain, requestId);
-            case DENIED -> resolveException(request, response,
-                    new AppException(Constants.ResponseCode.ACCESS_DENIED.getCode(), "请求路径不在允许的 API 分区内"));
+        // 让网关自身的日志与下游标准服务共享同一 trace-id，便于跨进程排障
+        MDC.put(ContextKeys.TRACE_ID, requestId);
+        try {
+            RouteKind routeKind = classifyRoute(request);
+            switch (routeKind) {
+                case ANONYMOUS, PLATFORM, ACTUATOR -> continueAnonymous(request, response, filterChain, requestId);
+                case ADMIN, APP -> authenticateBearer(request, response, filterChain, requestId, routeKind);
+                case EXTERNAL -> authenticateExternal(request, response, filterChain, requestId);
+                case DENIED -> resolveException(request, response,
+                        new AppException(Constants.ResponseCode.ACCESS_DENIED.getCode(), "请求路径不在允许的 API 分区内"));
+            }
+        } finally {
+            MDC.remove(ContextKeys.TRACE_ID);
         }
     }
 

@@ -1,8 +1,10 @@
 package cn.iantech.context.web;
 
 import cn.iantech.context.core.ContextAccessor;
+import cn.iantech.context.core.ContextKeys;
 import cn.iantech.context.core.RequestContext;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -107,6 +109,22 @@ class ContextWebFilterTest {
         assertNull(captured.get().authorizedScope());
         assertNull(captured.get().credentialVersion());
         assertFalse(ContextAccessor.current().isPresent());
+    }
+
+    // 验证请求号写入日志 MDC，并在请求结束后清理
+    @Test
+    void shouldBindRequestIdToMdcDuringRequestAndClearAfterwards() throws Exception {
+        ContextWebFilter filter = new ContextWebFilter();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(ContextWebFilter.REQUEST_ID_HEADER, "request-mdc");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<String> duringRequest = new AtomicReference<>();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) ->
+                duringRequest.set(MDC.get(ContextKeys.TRACE_ID)));
+
+        assertEquals("request-mdc", duringRequest.get());
+        assertNull(MDC.get(ContextKeys.TRACE_ID));
     }
 
     // 验证解析器返回空结果时过滤器仍按匿名上下文处理

@@ -13,6 +13,7 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * 分布式覆盖率端到端测试。
@@ -73,10 +74,8 @@ class GatewayCoverageE2eTest {
 
     @Test
     void shouldCoverStandardServiceThroughDubbo() throws Exception {
-        if (LOGIN_NAME.isBlank() || LOGIN_PASSWORD.isBlank()) {
-            System.out.println("[Coverage] 未提供 COVERAGE_E2E_LOGIN_NAME/PASSWORD，跳过 Dubbo 调用链场景");
-            return;
-        }
+        assumeTrue(!LOGIN_NAME.isBlank() && !LOGIN_PASSWORD.isBlank(),
+                "未提供 COVERAGE_E2E_LOGIN_NAME/PASSWORD，跳过 Dubbo 调用链场景");
         HttpResponse<String> login = post("/api/admin/auth/login", """
                 {"loginName":"%s","password":"%s","clientType":"WEB"}"""
                 .formatted(LOGIN_NAME, LOGIN_PASSWORD));

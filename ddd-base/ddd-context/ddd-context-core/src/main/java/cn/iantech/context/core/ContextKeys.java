@@ -1,7 +1,10 @@
 package cn.iantech.context.core;
 
-/** 统一的 Dubbo Attachment 键名。 */
+/** 统一的 Dubbo Attachment 键名与日志追踪键名。 */
 public final class ContextKeys {
+
+    /** 日志 MDC 键：logback 的 {@code %X{trace-id}} 使用该键输出请求追踪号。 */
+    public static final String TRACE_ID = "trace-id";
 
     public static final String REQUEST_ID = "x-ctx-request-id";
     public static final String PRINCIPAL_NAME = "x-ctx-principal";

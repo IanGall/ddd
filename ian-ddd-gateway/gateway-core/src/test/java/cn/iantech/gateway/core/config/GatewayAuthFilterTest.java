@@ -4,10 +4,12 @@ import cn.iantech.api.model.auth.AuthIdentityDTO;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.context.core.ContextAccessor;
+import cn.iantech.context.core.ContextKeys;
 import cn.iantech.context.core.RequestContext;
 import cn.iantech.gateway.core.service.GatewayAuthClient;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.HandlerExceptionResolver;
@@ -20,11 +22,29 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 class GatewayAuthFilterTest {
+
+    // 验证请求号写入日志 MDC，并在请求结束后清理，保证网关与下游共享 trace-id
+    @Test
+    void shouldBindRequestIdToMdcDuringRequestAndClearAfterwards() throws Exception {
+        GatewayAuthClient authClient = mock(GatewayAuthClient.class);
+        GatewayAuthFilter filter = new GatewayAuthFilter(authClient, resolver());
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
+        request.addHeader(GatewayAuthFilter.REQUEST_ID_HEADER, "gw-trace-1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<String> duringRequest = new AtomicReference<>();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) ->
+                duringRequest.set(MDC.get(ContextKeys.TRACE_ID)));
+
+        assertEquals("gw-trace-1", duringRequest.get());
+        assertNull(MDC.get(ContextKeys.TRACE_ID));
+    }
 
     @Test
     void shouldAllowOnlyMatchingBearerSubjectForAdminAndAppPartitions() throws Exception {

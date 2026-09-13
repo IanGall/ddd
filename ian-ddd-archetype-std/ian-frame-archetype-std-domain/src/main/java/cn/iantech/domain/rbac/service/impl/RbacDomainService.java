@@ -1,7 +1,5 @@
 package cn.iantech.domain.rbac.service.impl;
 
-import cn.iantech.common.constant.Constants;
-import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.auth.infra.IPasswordEncoder;
 import cn.iantech.domain.model.DomainPage;
 import cn.iantech.domain.rbac.infra.*;
@@ -13,19 +11,32 @@ import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.SYSTEM_PERMISSION_PREFIX;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkAccountId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkCustomPermission;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPassword;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPermissionId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPermType;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkRoleId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkTextLength;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkUserId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.illegalParameter;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeIds;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeNullableText;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeOptionalText;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizePageNum;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizePageSize;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeParentId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizePermType;
 
 @RequiredArgsConstructor
 @Service
 public class RbacDomainService implements IRbacDomainService {
 
-    private static final Integer DEFAULT_PAGE_NUM = 1;
-    private static final Integer DEFAULT_PAGE_SIZE = 20;
-    private static final Integer MAX_PAGE_SIZE = 100;
-    private static final Integer DEFAULT_PERM_TYPE = 2;
     private static final int MAX_PERMISSION_DEPTH = 64;
     private static final int MAX_USERNAME_LENGTH = 64;
     private static final int MAX_DISPLAY_NAME_LENGTH = 128;
@@ -38,10 +49,6 @@ public class RbacDomainService implements IRbacDomainService {
     private static final int MAX_PERMISSION_NAME_LENGTH = 128;
     private static final int MAX_PERMISSION_PATH_LENGTH = 255;
     private static final int MAX_HTTP_METHOD_LENGTH = 32;
-    private static final int MIN_PASSWORD_BYTES = 8;
-    private static final int MAX_PASSWORD_BYTES = 72;
-    private static final String SYSTEM_PERMISSION_PREFIX = "rbac:";
-    private static final Set<Integer> VALID_PERM_TYPES = Set.of(1, 2, 3);
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,64}$");
 
     private final IRbacUserRepository rbacUserRepository;
@@ -548,54 +555,6 @@ public class RbacDomainService implements IRbacDomainService {
                 .toList();
     }
 
-    private Integer normalizePageNum(Integer pageNum) {
-        return Objects.nonNull(pageNum) && pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private Integer normalizePageSize(Integer pageSize) {
-        if (Objects.isNull(pageSize) || pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    private Integer normalizePermType(Integer permType) {
-        if (Objects.isNull(permType)) {
-            return DEFAULT_PERM_TYPE;
-        }
-        return checkPermType(permType);
-    }
-
-    private Integer checkPermType(Integer permType) {
-        if (!VALID_PERM_TYPES.contains(permType)) {
-            throw illegalParameter("权限类型非法");
-        }
-        return permType;
-    }
-
-    private Long normalizeParentId(Long parentId) {
-        Long finalParentId = Objects.isNull(parentId) ? 0L : parentId;
-        if (finalParentId < 0) {
-            throw illegalParameter("父级权限ID非法");
-        }
-        return finalParentId;
-    }
-
-    private List<Long> normalizeIds(List<Long> ids, String fieldName) {
-        List<Long> source = Objects.isNull(ids) ? List.of() : ids;
-        if (source.stream().anyMatch(Objects::isNull)) {
-            throw illegalParameter(fieldName + "存在空值");
-        }
-
-        if (source.stream().anyMatch(id -> id <= 0)) {
-            throw illegalParameter(fieldName + "存在非法值");
-        }
-
-        return source.stream()
-                .distinct()
-                .toList();
-    }
-
     private void checkRoleIdsExists(Long accountId, List<Long> roleIds) {
         if (roleIds.isEmpty()) {
             return;
@@ -623,18 +582,6 @@ public class RbacDomainService implements IRbacDomainService {
 
         if (!missingPermissionIds.isEmpty()) {
             throw illegalParameter("权限不存在或已删除：" + missingPermissionIds);
-        }
-    }
-
-    private void checkUserId(Long userId) {
-        if (Objects.isNull(userId) || userId <= 0) {
-            throw illegalParameter("用户ID非法");
-        }
-    }
-
-    private void checkAccountId(Long accountId) {
-        if (Objects.isNull(accountId) || accountId <= 0) {
-            throw illegalParameter("账号ID非法");
         }
     }
 
@@ -666,56 +613,4 @@ public class RbacDomainService implements IRbacDomainService {
         }
         throw illegalParameter("权限层级不能超过 " + MAX_PERMISSION_DEPTH + " 层");
     }
-
-    private void checkCustomPermission(RbacPermissionEntity permission) {
-        if (Boolean.TRUE.equals(permission.getSystemManaged())
-                || StringUtils.startsWithIgnoreCase(permission.getPermCode(), SYSTEM_PERMISSION_PREFIX)) {
-            throw illegalParameter("系统权限禁止运行时更新或删除");
-        }
-    }
-
-    private void checkPassword(String rawPassword) {
-        int passwordBytes = StringUtils.defaultString(rawPassword).getBytes(StandardCharsets.UTF_8).length;
-        if (StringUtils.isBlank(rawPassword)
-                || passwordBytes < MIN_PASSWORD_BYTES || passwordBytes > MAX_PASSWORD_BYTES) {
-            throw illegalParameter("密码长度必须为 8 至 72 个 UTF-8 字节");
-        }
-    }
-
-    private String normalizeOptionalText(String value, String fieldName, int maxLength) {
-        String normalized = StringUtils.defaultString(StringUtils.trimToNull(value));
-        checkTextLength(normalized, fieldName, maxLength);
-        return normalized;
-    }
-
-    private String normalizeNullableText(String value, String fieldName, int maxLength) {
-        if (Objects.isNull(value)) {
-            return null;
-        }
-        return normalizeOptionalText(value, fieldName, maxLength);
-    }
-
-    private void checkTextLength(String value, String fieldName, int maxLength) {
-        int length = value.codePointCount(0, value.length());
-        if (length > maxLength) {
-            throw illegalParameter(fieldName + "长度不能超过 " + maxLength + " 个字符");
-        }
-    }
-
-    private void checkRoleId(Long roleId) {
-        if (Objects.isNull(roleId) || roleId <= 0) {
-            throw illegalParameter("角色ID非法");
-        }
-    }
-
-    private void checkPermissionId(Long id) {
-        if (Objects.isNull(id) || id <= 0) {
-            throw illegalParameter("权限ID非法");
-        }
-    }
-
-    private AppException illegalParameter(String info) {
-        return new AppException(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), info);
-    }
-
 }

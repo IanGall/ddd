@@ -602,6 +602,33 @@ merge_sessions() {
     if awk -v r="${ratio}" -v min="${COVERAGE_MIN_RATIO:-40}" 'BEGIN { exit !(r < min) }'; then
         warn "并集行覆盖率低于目标 ${COVERAGE_MIN_RATIO:-40}%，请补充 E2E 用例（目标可用 COVERAGE_MIN_RATIO 调整）"
     fi
+    prune_sessions
+}
+
+# 仅保留最近 N 个 Session（并集 Session 最新，必然被保留），避免 coverage/ 无限增长。
+# 单次运行会为每个测试类建 1 个 Session，长期累积可达数百 MB；可用 COVERAGE_KEEP_SESSIONS 调整。
+prune_sessions() {
+    local keep="${COVERAGE_KEEP_SESSIONS:-10}"
+    if ! [[ "${keep}" =~ ^[0-9]+$ ]]; then
+        warn "COVERAGE_KEEP_SESSIONS 非数字（${keep}），跳过历史 Session 清理"
+        return 0
+    fi
+    local dirs=() dir
+    while IFS= read -r dir; do
+        [[ -n "${dir}" ]] && dirs+=("${dir}")
+    done < <(ls -dt "${SESSIONS_DIR}"/*/ 2>/dev/null)
+    local total="${#dirs[@]}"
+    if (( total <= keep )); then
+        return 0
+    fi
+    local removed=0
+    for (( index = keep; index < total; index++ )); do
+        dir="${dirs[${index}]%/}"
+        if rm -rf "${dir}"; then
+            removed=$((removed + 1))
+        fi
+    done
+    info "清理历史 Session：删除 ${removed} 个，保留最近 ${keep} 个（COVERAGE_KEEP_SESSIONS 可调整）"
 }
 
 latest_session_dir() {
