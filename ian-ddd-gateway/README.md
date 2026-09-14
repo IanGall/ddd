@@ -71,12 +71,32 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" \
 curl -s -X POST http://127.0.0.1:8092/api/admin/auth/refresh \
   -H 'Content-Type: application/json' \
   -d "{\"refreshToken\":\"$REFRESH_TOKEN\"}"
+
+# C 端注册：请求体只提交业务字段；客户端 IP 由网关按连接地址填充，不接受客户端提交
+curl -X POST http://127.0.0.1:8092/api/app/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"loginName":"13800000000","password":"高强度密码","displayName":"C 端用户"}'
 ```
 
 管理端业务接口固定使用 `/api/admin/**`，C 端业务接口固定使用 `/api/app/**`。两端请求均在 `Authorization` 请求头中携带
 `Bearer <accessToken>`，Refresh Token 只提交给各自的 `/api/admin/auth/refresh` 或 `/api/app/auth/refresh`，不放入 URL
 或业务请求头。注销和设备会话接口也分别位于两端的 `/auth/**` 子路径；C 端不建立逐用户 RBAC，最终授权由业务服务按可信
 `customerId`、资源归属和有效绑定完成。
+
+**Refresh Token 并发提交的语义（契约）**：刷新是**一次性轮换**——每次成功刷新都会作废旧 Refresh Token 并签发新的。
+服务端把「旧 Refresh Token 再次出现」一律判定为**重放**，并撤销该设备的**整个会话族**（该账号在此设备上的 Access /
+Refresh Token 全部失效，用户需重新登录）。因此**客户端必须串行刷新**：
+
+- 同一 Refresh Token 不得并发提交，也不得在超时/失败后直接重试；
+- 多标签页、冷启动、弱网重发等场景需在客户端串行化（同一时刻只允许一个刷新在途）；
+- 刷新失败收到 `AUTH_REQUIRED` 属于**终态**，应清理本地令牌并重新登录，而不是重试。
+
+并发提交被按重放处理是**有意的安全取舍**：服务端无法区分「同一客户端的重复提交」与「攻击者重放窃取到的令牌」，
+而放行前者会削弱重放检测。该行为不可通过重试规避。
+
+**C 端注册的入参边界**：`POST /api/app/auth/register` 只接受 `loginName`、`password`、`displayName`；客户端 IP 由网关按
+`getRemoteAddr()` 填充后跨 RPC 传递给认证服务，用于注册入口的按 IP 风控。请求体中的同名字段会被忽略，客户端不得
+依赖或伪造该维度。
 
 ### 渠道 HMAC 请求
 
@@ -115,6 +135,11 @@ HTTP 错误统一返回 `{"code","info","data"}`，并保留 `X-Request-Id`。�
 | `AUTH_UNAVAILABLE`、`RPC_NO_PROVIDER` |         503 |
 | `RPC_TIMEOUT`                         |         504 |
 | `INTERNAL_ERROR`                      |         500 |
+
+> `AUTH_REFRESH_BUSY` 是**保留语义码，当前实现不会返回**：刷新令牌并发提交按上文「重放」语义处理（撤销整个设备会话族并返回
+> `AUTH_REQUIRED`）。客户端不应针对该码编写重试逻辑。
+>
+> `AUTH_RATE_LIMITED` 覆盖两处按 IP 限流：登录入口 30 次/分钟/IP；C 端注册入口 10 次/分钟/IP（两者各自计数，互不占用额度）。
 
 客户端必须按 `SUCCESS` 等语义码判断结果，不再使用 `0000`～`0003` 数字码。认证失败只在 `AUTH_REQUIRED` 等业务码下返回；只有
 无提供者、网络失败、超时或未识别的 Auth 运行时故障才返回服务不可用类错误。响应不会包含服务端堆栈。
