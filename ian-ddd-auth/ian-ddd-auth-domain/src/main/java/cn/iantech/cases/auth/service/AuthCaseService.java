@@ -135,8 +135,9 @@ public class AuthCaseService {
             throw unauthorized(customer ? "账号或密码不能为空" : "登录请求不能为空");
         }
         String ipAddressHash = Sha256.hex(value(command.ipAddress(), "unknown"));
-        String loginName = customer && command.loginName() != null
-                ? command.loginName().trim().toLowerCase(Locale.ROOT) : value(command.loginName(), "");
+        // 登录名归一化后再作为风控计数键：管理端与 C 端必须一致，
+        // 否则同一账号的大小写变体各自计数，账号级锁定会被绕过
+        String loginName = value(command.loginName(), "").trim().toLowerCase(Locale.ROOT);
         String loginNameHash = Sha256.hex(loginName);
         if (!riskStore.allowIpAttempt(ipAddressHash, MAXIMUM_IP_ATTEMPTS, IP_ATTEMPT_WINDOW)
                 || riskStore.isLoginBlocked(loginNameHash, MAXIMUM_LOGIN_FAILURES)) {
