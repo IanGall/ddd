@@ -42,7 +42,8 @@
   仅携带 Redis Cluster 路由信息，路由段不是可信身份；只有完整 Token 摘要命中且 Session 主体一致时才认证成功。
 - 会话数据使用 `auth:session:v4:{<userId>}:*` 命名空间。用户 ID 由全局 ID Starter 统一生成，同一用户的 Session、Access、
   Refresh、Family 与用户索引固定落在同一 Redis Cluster slot。旧 v3 Token 和 Session 不迁移、不回退，升级后客户端必须重新登录。
-- Refresh Token 轮换、重放检测、Family 撤销、登录风控和设备会话上限均由 Auth 在 Redis 中执行。
+- Refresh Token 轮换、重放检测、Family 撤销、登录风控、C 端注册入口的按 IP 风控和设备会话上限均由 Auth 在 Redis 中执行。
+  登录与注册各自计数：登录 30 次/分钟/IP，注册 10 次/分钟/IP；两者只使用不可逆摘要，原始 IP 不落 Redis。
 - Gateway HTTP 路径只使用 `/api/admin/**`、`/api/app/**`、`/api/external/**` 三类前缀，不保留旧路径。
 - 管理端和 C 端分别使用 `/api/admin/auth/**`、`/api/app/auth/**`；刷新请求必须通过 `expectedSubjectType`
   声明 `ADMIN` 或 `CUSTOMER`，Auth 在轮换前校验 Session 主体。
@@ -50,6 +51,8 @@
 - `rbac:*` 为系统权限前缀，系统权限只能由部署 SQL 和主账号初始化流程创建，运行时禁止更新、禁用或删除。
 - `POST /api/admin/platform/accounts` 的 `X-Platform-Token` 由 Provider 最终校验，Gateway 只负责转发。
 - Dubbo 身份上下文仅依赖私网、注册中心权限和网络白名单；`source=gateway` 不具备密码学防伪能力，Dubbo 端口禁止暴露到公网。
+  注册入口的客户端 IP（`CustomerRegisterReq.ipAddress`）由 Gateway 按连接地址填充，同样只具备该私网信任前提：
+  它用于风控分桶，不作为身份凭据。
 
 ## 本地启动
 
