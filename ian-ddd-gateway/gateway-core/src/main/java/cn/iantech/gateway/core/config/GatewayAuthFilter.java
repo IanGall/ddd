@@ -23,6 +23,7 @@ import org.springframework.web.servlet.ModelAndView;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -36,6 +37,34 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
     public static final String IDENTITY_ATTRIBUTE = GatewayAuthFilter.class.getName() + ".identity";
     public static final String ACCESS_TOKEN_ATTRIBUTE = GatewayAuthFilter.class.getName() + ".accessToken";
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
+
+    private static final String ADMIN_PREFIX = "/api/admin";
+    private static final String APP_PREFIX = "/api/app";
+    private static final String EXTERNAL_PREFIX = "/api/external";
+
+    /** 三类业务路径前缀；未匹配任何前缀的请求一律拒绝（默认拒绝）。 */
+    public static final List<String> ROUTE_PREFIXES = List.of(ADMIN_PREFIX, APP_PREFIX, EXTERNAL_PREFIX);
+
+    /** 健康探针端点，由 Spring Boot Actuator 提供，不经过任何认证。 */
+    public static final Route HEALTH_ROUTE = new Route("GET", "/actuator/health");
+
+    /**
+     * 免认证端点：客户端在这里换取令牌（登录 / 注册 / 刷新），因此不能要求 Bearer。
+     *
+     * <p>把白名单声明为常量而非散落在判定逻辑里，一是便于阅读「哪些端点公开」，二是让
+     * {@code GatewayPublicPathContractTest} 能拿它与真实的控制器映射交叉校验——白名单里出现
+     * 拼错或已删除的路径属于**过度放行**（fail-open），必须由构建拦住。</p>
+     */
+    public static final List<Route> ANONYMOUS_ROUTES = List.of(
+            new Route("POST", "/api/admin/auth/login"),
+            new Route("POST", "/api/admin/auth/refresh"),
+            new Route("POST", "/api/app/auth/register"),
+            new Route("POST", "/api/app/auth/login"),
+            new Route("POST", "/api/app/auth/refresh"));
+
+    /** 平台凭据端点：不校验 Bearer，改由 Provider 校验 {@code X-Platform-Token}。 */
+    public static final List<Route> PLATFORM_TOKEN_ROUTES = List.of(
+            new Route("POST", "/api/admin/platform/accounts"));
 
     private final GatewayAuthClient authClient;
     private final HandlerExceptionResolver handlerExceptionResolver;
@@ -157,31 +186,30 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         if (path == null) {
             return RouteKind.DENIED;
         }
-        if ("GET".equals(request.getMethod()) && path.equals("/actuator/health")) {
+        String method = request.getMethod();
+        if (HEALTH_ROUTE.matches(method, path)) {
             return RouteKind.ACTUATOR;
         }
-        if ("POST".equals(request.getMethod()) && path.equals("/api/admin/platform/accounts")) {
+        if (matchesAny(PLATFORM_TOKEN_ROUTES, method, path)) {
             return RouteKind.PLATFORM;
         }
-        if (isAnonymous(request.getMethod(), path)) {
+        if (matchesAny(ANONYMOUS_ROUTES, method, path)) {
             return RouteKind.ANONYMOUS;
         }
-        if (matches(path, "/api/admin")) {
+        if (matches(path, ADMIN_PREFIX)) {
             return RouteKind.ADMIN;
         }
-        if (matches(path, "/api/app")) {
+        if (matches(path, APP_PREFIX)) {
             return RouteKind.APP;
         }
-        if (matches(path, "/api/external")) {
+        if (matches(path, EXTERNAL_PREFIX)) {
             return RouteKind.EXTERNAL;
         }
         return RouteKind.DENIED;
     }
 
-    private boolean isAnonymous(String method, String path) {
-        return "POST".equals(method) && (path.equals("/api/admin/auth/login") || path.equals("/api/admin/auth/refresh")
-                || path.equals("/api/app/auth/register") || path.equals("/api/app/auth/login")
-                || path.equals("/api/app/auth/refresh"));
+    private boolean matchesAny(List<Route> routes, String method, String path) {
+        return routes.stream().anyMatch(route -> route.matches(method, path));
     }
 
     private String safePath(HttpServletRequest request) {
@@ -275,5 +303,15 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         EXTERNAL,
         ACTUATOR,
         DENIED
+    }
+
+    /**
+     * 一条路由声明（HTTP 方法 + 路径）。白名单以它对外暴露，供文档与映射一致性测试引用。
+     */
+    public record Route(String method, String path) {
+
+        public boolean matches(String requestMethod, String requestPath) {
+            return method.equals(requestMethod) && path.equals(requestPath);
+        }
     }
 }
