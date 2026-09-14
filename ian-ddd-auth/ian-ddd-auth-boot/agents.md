@@ -12,7 +12,7 @@
 
 - 依赖 `domain`、`trigger`、`infrastructure`，仅负责组合它们。
 - 不在启动模块写入业务流程或持久化 SQL。
-- Dubbo Provider 使用明文 Triple RPC，Nacos 注册中心凭据只允许由环境变量或 Secret 注入。
+- Dubbo Provider 使用明文 `dubbo` 协议（默认 Hessian2 序列化），Nacos 注册中心凭据只允许由环境变量或 Secret 注入。
 - 禁止提交生产凭据，也禁止记录认证附件。
 
 ## 提交前检查

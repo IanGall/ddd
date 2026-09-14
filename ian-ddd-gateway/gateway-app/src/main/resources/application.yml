@@ -15,7 +15,8 @@ dubbo:
     name: ian-ddd-gateway
     qos-enable: false
     metadata-type: remote
-    metadata-service-protocol: tri
+    # 元数据服务与业务服务保持同协议：不显式指定时 Dubbo 内部的兜底值是 tri
+    metadata-service-protocol: dubbo
   consumer:
     check: false
 

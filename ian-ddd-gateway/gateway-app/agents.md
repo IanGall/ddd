@@ -8,9 +8,9 @@
 ## 依赖约束
 
 - 统一继承网关聚合根，由聚合根导入 `ddd-base-bom` 并管理实际使用的标准 API 版本。
-- RPC 调用统一使用 Dubbo Triple，避免重试放大写请求和超时请求。
+- RPC 调用统一使用 Dubbo（`dubbo` 协议），避免重试放大写请求和超时请求。
 - 管理员主账号 ID 必须按 BIGINT/Long 语义经过配置校验并由认证上下文解析器绑定，禁止从请求 Header 读取。
-- Dubbo Consumer 使用明文 Triple；RPC 连接异常按统一错误码返回，不暴露下游细节。
+- Dubbo Consumer 使用明文 `dubbo` 协议；RPC 连接异常按统一错误码返回，不暴露下游细节。
 - 公共响应与异常模型复用 `ddd-common`，禁止新增重复公共模块或 Hutool 依赖。
 
 ## 提交前检查

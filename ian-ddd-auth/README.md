@@ -66,7 +66,7 @@ Access Token、Refresh Token、渠道密钥和 AES IV 仍使用不可预测的�
 - Trigger 负责解析可信请求上下文；HTTP 与 Dubbo 适配器分别按 Profile/模块引入 `ddd-context-web`、
   `ddd-context-dubbo`，并将显式 Actor 传给 Cases。
 - RBAC 主账号 ID 由可信认证上下文提供，不能使用 `X-Account-Id` 或 `X-User-Id` 请求头；领域层只接收显式 `Long accountId`。
-- Provider 使用明文 Triple RPC；Nacos 注册中心仍通过用户名和密码认证，生产凭据由部署环境注入。
+- Provider 使用明文 Dubbo RPC；Nacos 注册中心仍通过用户名和密码认证，生产凭据由部署环境注入。
 
 ## Auth、RBAC 与 Customer 安全边界
 

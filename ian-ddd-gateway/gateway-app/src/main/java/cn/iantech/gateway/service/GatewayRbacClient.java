@@ -17,10 +17,10 @@ import static cn.iantech.common.constant.Constants.ResponseCode.RPC_ERROR;
 @Component
 public class GatewayRbacClient {
 
-    @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
+    @DubboReference(version = "1.0.0", protocol = "dubbo", timeout = 3000, retries = 0, check = false)
     private IRbacService rbacService;
 
-    @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
+    @DubboReference(version = "1.0.0", protocol = "dubbo", timeout = 3000, retries = 0, check = false)
     private IPlatformAccountService platformAccountService;
 
     public RbacAccountDTO createAccount(PlatformCreateAccountReq request) {

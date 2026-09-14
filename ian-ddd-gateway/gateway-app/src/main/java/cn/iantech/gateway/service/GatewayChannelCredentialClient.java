@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 @Component
 public class GatewayChannelCredentialClient {
 
-    @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
+    @DubboReference(version = "1.0.0", protocol = "dubbo", timeout = 3000, retries = 0, check = false)
     private IChannelCredentialService channelCredentialService;
 
     public ChannelCredentialSecretDTO create(CreateChannelCredentialReq request) {

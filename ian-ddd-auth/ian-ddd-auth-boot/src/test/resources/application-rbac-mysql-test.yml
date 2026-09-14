@@ -35,15 +35,15 @@ mybatis:
     map-underscore-to-camel-case: true
 
 dubbo:
-  # 测试不需要对外暴露 RPC：不导出服务、不注册，只为 @EnableDubbo 提供 tri 协议配置。
+  # 测试不需要对外暴露 RPC：不导出服务、不注册，只为 @EnableDubbo 提供 dubbo 协议配置。
   # 必须 provider.export=false——同一 JVM 内多个测试上下文并存时，重复导出同一服务路径会直接失败。
   registry:
     address: N/A
   provider:
     export: false
   protocol:
-    id: tri
-    name: tri
+    id: dubbo
+    name: dubbo
     port: -1
 
 xxl:

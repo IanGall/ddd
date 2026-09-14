@@ -34,7 +34,7 @@ Provider
 最终校验，Gateway 不保存、不比较该凭据。Provider 未配置 `PLATFORM_ADMIN_TOKEN` 时拒绝启动。登录、刷新、注销和会话管理 按管理端
 `/api/admin/auth/**` 与 C 端 `/api/app/auth/**` 分离，并由 Gateway 转发给 Auth；业务请求携带的是由 Auth 签发的 opaque
 Bearer Token。Gateway 每个受保护请求调用 Auth 校验令牌后， 再恢复主账号和当前用户上下文，不采信外部 `X-Account-Id` 或
-`X-User-Id`。Dubbo Triple 使用现有明文 RPC 连接，不启用 JWT、JWKS
+`X-User-Id`。Dubbo 使用现有明文 RPC 连接，不启用 JWT、JWKS
 或 mTLS。
 
 ### 编译与测试
@@ -206,7 +206,7 @@ C 端注册登录、渠道凭证管理与异常语义。
 ## 通用网关骨架
 
 通用网关骨架已独立到 `ddd-scaffold` 仓库的 `scaffold-gateway` 模块。骨架包含 Web 接入、Auth RPC 认证、参数校验、统一异常、
-Actuator、Dubbo Triple 消费端和 Nacos 配置。认证契约来自共享制品 `ian-ddd-auth-api`（`cn.iantech.api.IAuthService`），
+Actuator、Dubbo 消费端和 Nacos 配置。认证契约来自共享制品 `ian-ddd-auth-api`（`cn.iantech.api.IAuthService`），
 统一承载用户会话认证与渠道 HMAC 认证 RPC；两套认证算法仍分别由 Auth 与 Channel Cases 服务实现。
 具体 RBAC 管理接口仍由业务网关自行接入，不复制到骨架中。
 
@@ -243,4 +243,4 @@ cd demo-gateway
 mvn clean package
 ```
 
-接入业务 RPC 时，网关工程依赖共享契约 `ian-ddd-auth-api`（或目标服务自己的 `*-api` 制品），并在业务 Controller 中使用 `@DubboReference(protocol = "tri", retries = 0)` 调用。骨架不生成虚假的 RPC 接口或提供者。
+接入业务 RPC 时，网关工程依赖共享契约 `ian-ddd-auth-api`（或目标服务自己的 `*-api` 制品），并在业务 Controller 中使用 `@DubboReference(protocol = "dubbo", retries = 0)` 调用。骨架不生成虚假的 RPC 接口或提供者。

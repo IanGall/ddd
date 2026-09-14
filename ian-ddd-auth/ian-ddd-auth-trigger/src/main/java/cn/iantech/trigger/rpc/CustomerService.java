@@ -9,7 +9,7 @@ import cn.iantech.trigger.convertor.CustomerCommandConvertor;
 import lombok.RequiredArgsConstructor;
 import org.apache.dubbo.config.annotation.DubboService;
 
-@DubboService(version = "1.0.0", protocol = "tri", timeout = 3000)
+@DubboService(version = "1.0.0", protocol = "dubbo", timeout = 3000)
 @RequiredArgsConstructor
 public class CustomerService implements ICustomerService {
     private final CustomerCaseService customerCaseService;

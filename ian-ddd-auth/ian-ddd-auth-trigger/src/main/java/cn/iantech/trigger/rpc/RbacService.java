@@ -16,9 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.apache.dubbo.config.annotation.DubboService;
 
 /**
- * Triple 入站适配器，负责 API DTO、可信 Actor 与 RBAC 用例模型之间的转换。
+ * Dubbo 入站适配器，负责 API DTO、可信 Actor 与 RBAC 用例模型之间的转换。
  */
-@DubboService(version = "1.0.0", protocol = "tri", timeout = 3000)
+@DubboService(version = "1.0.0", protocol = "dubbo", timeout = 3000)
 @RequiredArgsConstructor
 public class RbacService implements IRbacService {
 

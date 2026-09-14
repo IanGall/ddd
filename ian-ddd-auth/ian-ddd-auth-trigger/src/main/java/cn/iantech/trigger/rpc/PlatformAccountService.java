@@ -19,7 +19,7 @@ import java.util.Objects;
 /**
  * 平台开户 RPC 入口，Provider 必须在进入领域用例前完成平台凭据校验。
  */
-@DubboService(version = "1.0.0", protocol = "tri", timeout = 3000)
+@DubboService(version = "1.0.0", protocol = "dubbo", timeout = 3000)
 public class PlatformAccountService implements IPlatformAccountService {
 
     private final RbacCaseService rbacCaseService;

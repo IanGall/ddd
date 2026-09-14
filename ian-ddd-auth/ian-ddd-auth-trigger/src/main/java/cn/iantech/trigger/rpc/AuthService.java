@@ -19,7 +19,7 @@ import java.util.List;
 /**
  * Auth Dubbo 入站适配器，负责 API DTO 与认证用例模型的转换。
  */
-@DubboService(version = "1.0.0", protocol = "tri", timeout = 3000)
+@DubboService(version = "1.0.0", protocol = "dubbo", timeout = 3000)
 @RequiredArgsConstructor
 public class AuthService implements IAuthService {
 

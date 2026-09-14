@@ -39,7 +39,7 @@ ddd/
 |---------------------|---------|--------------------------------------------------|
 | JDK                 | 21      | 构建时由 Maven Enforcer 强制校验                 |
 | Spring Boot         | 4.1.1   | 各服务统一版本                                   |
-| Dubbo               | 3.3.6   | Triple 协议，网关以 `@DubboReference` 调用认证服务 |
+| Dubbo               | 3.3.6   | `dubbo` 协议（默认 Hessian2 序列化），网关以 `@DubboReference` 调用认证服务 |
 | Nacos Client        | 3.2.3   | 注册中心                                         |
 | MyBatis Spring Boot | 4.1.0   | 持久化                                           |
 | Redisson            | 4.7.0   | Redis 客户端，由 `ddd-redis-starter` 自动装配    |
@@ -55,7 +55,7 @@ ddd/
 ## 调用关系
 
 ```text
-┌──────────┐   HTTP :8092    ┌─────────────────┐   Dubbo Triple   ┌───────────────────────────┐
+┌──────────┐   HTTP :8092    ┌─────────────────┐      Dubbo       ┌───────────────────────────┐
 │  调用方   │ ──────────────▶ │ ian-ddd-gateway │ ───────────────▶ │ ian-ddd-auth     │
 └──────────┘                 │  认证 / 路由     │                  │ Auth/RBAC/Customer/Channel │
                              └─────────────────┘                  └───────────────────────────┘
@@ -66,8 +66,8 @@ ddd/
 ```
 
 - 网关只做 HTTP 接入与认证转发，不连接 Redis、不保存会话；Opaque Token 与登录风控由认证服务的 Auth 统一持有。
-- 认证服务同时以 Dubbo Provider 注册（应用名 `ian-ddd-auth`，Triple 端口 50051）并暴露 HTTP（8091）。
-- 服务间只有明文 Triple RPC，注册中心通过用户名/密码认证，生产环境凭据由部署环境注入。
+- 认证服务同时以 Dubbo Provider 注册（应用名 `ian-ddd-auth`，`dubbo` 协议端口 20880）并暴露 HTTP（8091）。
+- 服务间只有明文 Dubbo RPC，注册中心通过用户名/密码认证，生产环境凭据由部署环境注入。
 
 ## 环境要求
 

@@ -21,10 +21,10 @@ import static cn.iantech.common.constant.Constants.ResponseCode.AUTH_UNAVAILABLE
  */
 public class GatewayAuthClient {
 
-    @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
+    @DubboReference(version = "1.0.0", protocol = "dubbo", timeout = 3000, retries = 0, check = false)
     private IAuthService authService;
 
-    @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
+    @DubboReference(version = "1.0.0", protocol = "dubbo", timeout = 3000, retries = 0, check = false)
     private ICustomerService customerService;
 
     public CustomerUserDTO register(CustomerRegisterReq request) {

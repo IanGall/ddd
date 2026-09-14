@@ -1,7 +1,7 @@
 # 内部 API 聚合协作说明
 
 ## 模块定位
-- 本目录是**内部 API 分类聚合**（`packaging=pom`）：服务之间通过 Dubbo Triple 调用的 RPC 契约。
+- 本目录是**内部 API 分类聚合**（`packaging=pom`）：服务之间通过 Dubbo（`dubbo` 协议）调用的 RPC 契约。
 - 子模块命名 `<service>-api`，与 `<service>` 服务一一对应（当前 `ian-ddd-auth-api`）。
 - 对外/第三方 HTTP 契约不属于本分类，放 `ian-ddd-api-external`。
 

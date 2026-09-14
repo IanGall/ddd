@@ -24,7 +24,7 @@ ian-ddd-api/                          # 聚合 POM（packaging=pom）
 | 维度 | `ian-ddd-api-internal`（分类聚合） | `ian-ddd-api-external` |
 |------|-----------------------------------|------------------------|
 | 子模块 | `<service>-api`，当前 `ian-ddd-auth-api` | 直接承载外部 HTTP 契约 |
-| 调用方式 | Dubbo Triple（RPC） | HTTP，Spring 声明式接口 `@HttpExchange` |
+| 调用方式 | Dubbo `dubbo` 协议（RPC） | HTTP，Spring 声明式接口 `@HttpExchange` |
 | 包名 | `cn.iantech.api.*` | `cn.iantech.api.external.*` |
 | 额外依赖 | 无 | `spring-web`（无 Spring Cloud / Feign） |
 | 消费方 | 服务实现（Provider）、网关（Consumer） | 需要调用外部/第三方 HTTP 服务的模块 |

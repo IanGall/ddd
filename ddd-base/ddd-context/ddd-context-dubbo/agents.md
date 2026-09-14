@@ -11,7 +11,9 @@
 - 只允许使用 `RpcContext.getClientAttachment()` 和 `RpcContext.getServerAttachment()`。
 - 禁止使用 Dubbo 2 风格的 `RpcContext.getContext()`，也不提供兼容层。
 - Filter 必须通过 Dubbo SPI 文件和 `@Activate` 自动启用，不要求 Controller 或业务服务手工设置附件。
-- 不修改 RPC DTO，不改变现有 Triple、Nacos、超时或重试策略。
+- 不修改 RPC DTO，不改变现有 `dubbo` 协议、Nacos、超时或重试策略。
+- 序列化沿用 Dubbo 默认（Hessian2，由 `hessian-lite` 提供），不额外引入序列化扩展。
+- 元数据服务走 `dubbo.application.metadata-service-protocol`：协议名改成 `dubbo` 后必须显式指定（不指定时 Dubbo 内部的兜底值是 `tri`），两侧保持一致。
 
 ## 传播与清理
 

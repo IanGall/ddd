@@ -11,7 +11,7 @@
 - 核心领域规则必须由下游 DDD 服务实现。
 - 网关每个受保护请求通过 Auth RPC 校验 opaque Token 后建立主账号与当前用户上下文，不信任 `X-Account-Id`、`X-User-Id` 等外部身份
   Header。
-- Dubbo Triple 消费端使用明文 RPC；网关不持有 Session、不连接 Auth Redis，不做任何本地令牌认证。
+- Dubbo 消费端使用明文 RPC（`dubbo` 协议）；网关不持有 Session、不连接 Auth Redis，不做任何本地令牌认证。
 
 ## 依赖约束
 - 构建统一继承 `ddd-base`，通用依赖统一导入 `ddd-base-bom`，避免模块内分散定义版本。

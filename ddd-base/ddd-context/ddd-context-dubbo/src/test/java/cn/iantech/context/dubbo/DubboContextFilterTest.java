@@ -231,7 +231,7 @@ class DubboContextFilterTest {
 
         @Override
         public URL getUrl() {
-            return URL.valueOf("tri://127.0.0.1:50051/cn.iantech.TestService");
+            return URL.valueOf("dubbo://127.0.0.1:20880/cn.iantech.TestService");
         }
 
         @Override

@@ -55,8 +55,8 @@ dubbo:
     parameters:
       enable-empty-protection: true
   protocol:
-    name: tri
-    port: ${TRIPLE_PROTOCOL_PORT:50051}
+    name: dubbo
+    port: ${DUBBO_PROTOCOL_PORT:20880}
     ssl-enabled: false
   scan:
     base-packages: cn.iantech.trigger.rpc

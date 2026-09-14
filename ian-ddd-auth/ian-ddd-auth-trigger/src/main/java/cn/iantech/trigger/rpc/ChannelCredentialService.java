@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * 渠道凭证管理 Dubbo 入站适配器。
  */
-@DubboService(version = "1.0.0", protocol = "tri", timeout = 3000)
+@DubboService(version = "1.0.0", protocol = "dubbo", timeout = 3000)
 @RequiredArgsConstructor
 public class ChannelCredentialService implements IChannelCredentialService {
     private final ChannelCredentialCaseService channelCredentialCaseService;
