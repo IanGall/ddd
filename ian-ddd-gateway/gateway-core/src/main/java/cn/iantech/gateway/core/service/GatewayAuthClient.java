@@ -5,6 +5,7 @@ import cn.iantech.api.ICustomerService;
 import cn.iantech.api.model.auth.*;
 import cn.iantech.api.model.channel.ChannelSignatureVerifyReq;
 import cn.iantech.api.model.customer.CustomerLoginReq;
+import cn.iantech.api.model.customer.CustomerRegisterReq;
 import cn.iantech.api.model.customer.CustomerUserDTO;
 import org.apache.dubbo.config.annotation.DubboReference;
 
@@ -26,8 +27,8 @@ public class GatewayAuthClient {
     @DubboReference(version = "1.0.0", protocol = "tri", timeout = 3000, retries = 0, check = false)
     private ICustomerService customerService;
 
-    public CustomerUserDTO register(String loginName, String password, String displayName) {
-        return invoke(() -> customerService.register(loginName, password, displayName));
+    public CustomerUserDTO register(CustomerRegisterReq request) {
+        return invoke(() -> customerService.register(request));
     }
 
     public AuthTokenDTO login(AuthLoginReq request) {

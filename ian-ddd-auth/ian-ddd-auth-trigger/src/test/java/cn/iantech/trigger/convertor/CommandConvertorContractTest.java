@@ -6,6 +6,7 @@ import cn.iantech.api.model.channel.ChannelSignatureVerifyReq;
 import cn.iantech.api.model.channel.CreateChannelCredentialReq;
 import cn.iantech.api.model.channel.UpdateChannelCredentialStatusReq;
 import cn.iantech.api.model.customer.CustomerLoginReq;
+import cn.iantech.api.model.customer.CustomerRegisterReq;
 import cn.iantech.api.model.rbac.CreateRbacUserReq;
 import cn.iantech.api.model.rbac.ReplaceUserRolesReq;
 import cn.iantech.cases.auth.model.AuthCaseModels.LoginCommand;
@@ -13,6 +14,7 @@ import cn.iantech.cases.auth.model.AuthCaseModels.RefreshCommand;
 import cn.iantech.cases.channel.model.ChannelCaseModels.CreateCredential;
 import cn.iantech.cases.channel.model.ChannelCaseModels.SignatureCommand;
 import cn.iantech.cases.channel.model.ChannelCaseModels.UpdateCredentialStatus;
+import cn.iantech.cases.customer.model.CustomerRegisterCommand;
 import cn.iantech.cases.rbac.model.RbacCaseCommands;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
@@ -34,6 +36,8 @@ class CommandConvertorContractTest {
     private final RbacCommandConvertor rbacConvertor = Mappers.getMapper(RbacCommandConvertor.class);
     private final ChannelCredentialCommandConvertor channelConvertor =
             Mappers.getMapper(ChannelCredentialCommandConvertor.class);
+    private final CustomerCommandConvertor customerConvertor =
+            Mappers.getMapper(CustomerCommandConvertor.class);
 
     @Test
     void shouldMapAdminLoginRequest() {
@@ -139,6 +143,22 @@ class CommandConvertorContractTest {
     }
 
     @Test
+    void shouldMapCustomerRegisterRequestIncludingClientIp() {
+        CustomerRegisterReq req = new CustomerRegisterReq();
+        req.setLoginName("13800000000");
+        req.setPassword("pwd-1234");
+        req.setDisplayName("C 端用户");
+        req.setIpAddress("10.0.0.1");
+
+        CustomerRegisterCommand command = customerConvertor.toCommand(req);
+
+        assertEquals("13800000000", command.loginName());
+        assertEquals("pwd-1234", command.password());
+        assertEquals("C 端用户", command.displayName());
+        assertEquals("10.0.0.1", command.ipAddress());
+    }
+
+    @Test
     void shouldPassNullSourceThroughAsNull() {
         assertNull(authConvertor.toCommand((AuthLoginReq) null));
         assertNull(authConvertor.toCommand((CustomerLoginReq) null));
@@ -146,5 +166,6 @@ class CommandConvertorContractTest {
         assertNull(authConvertor.toCommand((ChannelSignatureVerifyReq) null));
         assertNull(rbacConvertor.toCommand((CreateRbacUserReq) null));
         assertNull(channelConvertor.toCommand((CreateChannelCredentialReq) null));
+        assertNull(customerConvertor.toCommand((CustomerRegisterReq) null));
     }
 }

@@ -3,6 +3,7 @@ package cn.iantech.gateway.controller;
 import cn.iantech.api.model.auth.AuthSessionDTO;
 import cn.iantech.api.model.auth.AuthSubjectTypes;
 import cn.iantech.api.model.customer.CustomerLoginReq;
+import cn.iantech.api.model.customer.CustomerRegisterReq;
 import cn.iantech.api.model.customer.CustomerUserDTO;
 import cn.iantech.common.model.Response;
 import cn.iantech.gateway.model.AuthWebModels;
@@ -31,8 +32,16 @@ public class AppAuthController {
     }
 
     @PostMapping("/register")
-    public Response<CustomerUserDTO> register(@Valid @RequestBody AuthWebModels.RegisterRequest request) {
-        return success(authClient.register(request.loginName(), request.password(), request.displayName()));
+    public Response<CustomerUserDTO> register(
+            @Valid @RequestBody AuthWebModels.RegisterRequest request, HttpServletRequest servletRequest) {
+        // 客户端 IP 由网关按连接地址填充：认证服务据此对注册入口做按 IP 风控，
+        // 不接受请求体中的同名字段，避免客户端伪造风控维度。
+        CustomerRegisterReq register = new CustomerRegisterReq();
+        register.setLoginName(request.loginName());
+        register.setPassword(request.password());
+        register.setDisplayName(request.displayName());
+        register.setIpAddress(limited(servletRequest.getRemoteAddr(), 64));
+        return success(authClient.register(register));
     }
 
     @PostMapping("/login")
