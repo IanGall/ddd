@@ -135,7 +135,7 @@ CREATE TABLE channel_credential
 
 CREATE TABLE channel_data_scope
 (
-    id BIGINT PRIMARY KEY,
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
     channel_id         BIGINT       NOT NULL,
     scope_type         VARCHAR(32)  NOT NULL,
     scope_value        VARCHAR(128) NOT NULL,

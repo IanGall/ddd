@@ -22,11 +22,11 @@
     </delete>
     <insert id="insertBatch">
         INSERT INTO channel_data_scope
-            (id, channel_id, scope_type, scope_value, status, version, created_by_user_id, updated_by_user_id,
+            (channel_id, scope_type, scope_value, status, version, created_by_user_id, updated_by_user_id,
              deleted, create_time, update_time)
         VALUES
         <foreach collection="items" item="item" separator=",">
-            (#{item.id}, #{item.channelId}, #{item.scopeType}, #{item.scopeValue}, #{item.status}, #{item.version},
+            (#{item.channelId}, #{item.scopeType}, #{item.scopeValue}, #{item.status}, #{item.version},
              #{item.createdByUserId}, #{item.updatedByUserId}, #{item.deleted}, NOW(), NOW())
         </foreach>
     </insert>

@@ -3,21 +3,28 @@ package cn.iantech.infrastructure.persistent.repository;
 import cn.iantech.domain.channel.infra.IChannelCredentialRepository;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
 import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.IChannelCredentialDao;
 import cn.iantech.infrastructure.persistent.po.ChannelCredentialPO;
 import io.github.linpeilie.Converter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-@RequiredArgsConstructor
 public class ChannelCredentialRepository implements IChannelCredentialRepository {
     private final IChannelCredentialDao dao;
     private final Converter converter;
     private final GlobalIdGenerator globalIdGenerator;
+
+    public ChannelCredentialRepository(IChannelCredentialDao dao, Converter converter,
+                                      GlobalIdGeneratorProvider idGeneratorProvider) {
+        this.dao = dao;
+        this.converter = converter;
+        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.CHANNEL_CREDENTIAL.businessName());
+    }
 
     @Override
     public ChannelCredentialEntity save(ChannelCredentialEntity entity) {

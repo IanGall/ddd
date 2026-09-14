@@ -4,10 +4,11 @@ import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.ICustomerUserDao;
 import cn.iantech.infrastructure.persistent.po.CustomerUserPO;
 import io.github.linpeilie.Converter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
@@ -16,11 +17,17 @@ import java.util.Optional;
 import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 @Repository
-@RequiredArgsConstructor
 public class CustomerUserRepository implements ICustomerUserRepository {
     private final ICustomerUserDao dao;
     private final Converter converter;
     private final GlobalIdGenerator globalIdGenerator;
+
+    public CustomerUserRepository(ICustomerUserDao dao, Converter converter,
+                                 GlobalIdGeneratorProvider idGeneratorProvider) {
+        this.dao = dao;
+        this.converter = converter;
+        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.CUSTOMER_USER.businessName());
+    }
 
     @Override
     public CustomerUserEntity save(CustomerUserEntity entity) {

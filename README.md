@@ -13,7 +13,7 @@ ddd/
 │   ├── ddd-common/                # 通用响应、分页模型、持久化基类、常量与应用异常
 │   ├── ddd-context/               # 协议无关请求上下文：core / dubbo / web 适配
 │   ├── ddd-redis-starter/         # 技术无关 Redis API 与 Redisson 自动装配
-│   ├── ddd-id-generator-starter/  # Redis 租约分配 WorkerId + 全局唯一 64 位 ID
+│   ├── ddd-id-generator-starter/  # Redis 租约分配 WorkerId（可单生成器或按业务分块）+ 全局唯一 64 位 ID
 │   ├── ddd-dependencies/          # 第三方依赖版本 BOM
 │   ├── ddd-base-bom/              # 汇总 BOM（第三方 + 基础组件 + 契约版本）
 │   └── ian-ddd-coverage/          # 分布式 E2E 覆盖率基础设施

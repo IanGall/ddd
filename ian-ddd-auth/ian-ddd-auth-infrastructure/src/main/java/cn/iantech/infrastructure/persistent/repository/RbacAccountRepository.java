@@ -4,10 +4,11 @@ import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.rbac.infra.IRbacAccountRepository;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.IRbacAccountDao;
 import cn.iantech.infrastructure.persistent.po.RbacAccountPO;
 import io.github.linpeilie.Converter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
@@ -16,12 +17,18 @@ import java.util.Optional;
 import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 @Repository
-@RequiredArgsConstructor
 public class RbacAccountRepository implements IRbacAccountRepository {
 
     private final IRbacAccountDao accountDao;
     private final Converter converter;
     private final GlobalIdGenerator globalIdGenerator;
+
+    public RbacAccountRepository(IRbacAccountDao accountDao, Converter converter,
+                                GlobalIdGeneratorProvider idGeneratorProvider) {
+        this.accountDao = accountDao;
+        this.converter = converter;
+        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.RBAC_ACCOUNT.businessName());
+    }
 
     @Override
     public RbacAccountEntity save(RbacAccountEntity entity) {

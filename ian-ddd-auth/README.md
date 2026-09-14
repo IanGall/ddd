@@ -17,12 +17,49 @@
 ## 全局唯一 ID
 
 - Infrastructure 默认依赖 `ddd-id-generator-starter`，业务通过构造器注入
-  `cn.iantech.id.GlobalIdGenerator`，调用 `nextId()` 获取 `long` 类型全局唯一 ID。
-- Starter 使用 Redis 租约自动分配并续租 Worker ID；应用无需手工配置 Worker ID，但必须提供可用的 Redis 连接。
-- 主账号、管理子账号、C 端用户、渠道凭证、渠道数据范围及 Auth Session/Family ID 均由该 Starter 生成；对应数据库主键不再使用
-  `AUTO_INCREMENT`。Access Token、Refresh Token、渠道密钥和 AES IV 仍使用不可预测的安全随机值。
-- `test` Profile 默认设置 `ddd.id-generator.enabled=false`，避免普通测试连接外部 Redis；需要验证 ID 租约时，应使用独立集成测试
-  Profile 和隔离的 Redis 实例。
+  `cn.iantech.id.GlobalIdGeneratorProvider`，在构造期用 `forBusiness(...)` 取到本业务的生成器，调用 `nextId()` 获取
+  `long` 类型全局唯一 ID。
+- 本服务按业务划分 Worker ID 区间（`worker-id-block-size: 64`），业务名与块序号集中在
+  `cn.iantech.infrastructure.id.AuthIdBusiness` 与 `application.yml` 的 `ddd.id-generator.businesses` 中，
+  两者必须保持一致，否则启动阶段取生成器即失败：
+
+  | 业务名                | 块序号 | Worker ID 区间 |
+  |-----------------------|--------|----------------|
+  | `auth-session`        | 0      | `[0, 64)`      |
+  | `rbac-account`        | 1      | `[64, 128)`    |
+  | `rbac-user`           | 2      | `[128, 192)`   |
+  | `customer-user`       | 3      | `[192, 256)`   |
+  | `channel-credential`  | 4      | `[256, 320)`   |
+
+- Starter 使用 Redis 租约自动分配并续租 Worker ID；应用无需手工配置 Worker ID，但必须提供可用的 Redis 连接。每个业务独立续租，
+  单个业务的租约失效不会影响其它业务出号。
+- `test` Profile 默认设置 `ddd.id-generator.enabled=false`，避免普通测试连接外部 Redis；此时容器中不提供
+  `GlobalIdGeneratorProvider`，需要 ID 的用例应通过 `@TestConfiguration` 提供确定性替身（见
+  `cn.iantech.test.rbac.FixedGlobalIdGeneratorProvider`）。需要验证真实 ID 租约时，应使用独立集成测试 Profile 和隔离的
+  Redis 实例。
+- 每个业务的副本数不得超过 `worker-id-block-size`，否则该业务会因区间耗尽而启动失败。
+
+### 逐表 ID 策略
+
+选型判据见 `ddd-base/README.md` 的「是否需要全局 ID」；本服务逐表落地结果如下：
+
+| 表 | ID 来源 | 依据 |
+|---|---|---|
+| `rbac_account` | 生成器（`rbac-account`） | `accountId` 是跨表隔离键（`rbac_user`/`rbac_role`/`rbac_permission.account_id`），且出现在 RPC 契约 |
+| `rbac_user` | 生成器（`rbac-user`） | `RbacUserDTO.id` 与多个 Req.id 对外暴露 |
+| `customer_user` | 生成器（`customer-user`） | `CustomerUserDTO.id` 对外暴露 |
+| `channel_credential` | 生成器（`channel-credential`） | `ChannelCredentialDTO.id` 与 4 个 Req.id 对外暴露，并被 `channel_data_scope.channel_id` 引用 |
+| Auth Session/Family | 生成器（`auth-session`） | 纯应用生成标识，只存 Redis，没有数据库行 |
+| `channel_data_scope` | **数据库自增** | 从属数据：ID 不出服务、无表引用、无按 ID 查询，领域模型 `ChannelDataScope` 是 record 且不含自身 ID |
+| `rbac_role` | **数据库自增** | 单库单写；ID 已被 SQL 种子数据固定并被 `rbac_user_role` 引用，改造成本高于收益（已知特例） |
+| `rbac_permission` | **数据库自增** | 同上；另有 `20260819_rbac_permission_system_managed.sql` 迁移依赖既有 ID |
+| `rbac_user_role` / `rbac_role_permission` | 联合主键，无 `id` | 关联表不需要业务标识 |
+| `user_order_*` | `id` 自增 + `order_id`/`uuid` 唯一键 | 分片表：自增做聚簇 PK（避免随机主键页分裂），全局唯一由业务键承担 |
+
+`channel_data_scope` 由全局 ID 改为数据库自增需要同步已有库，见
+`ian-ddd-auth-boot/src/main/resources/sql/20260914_channel_id_strategy_alignment.sql`（人工执行，仅元数据变更）。
+
+Access Token、Refresh Token、渠道密钥和 AES IV 仍使用不可预测的安全随机值，不受上述判据影响。
 
 ## 上下文与服务认证
 

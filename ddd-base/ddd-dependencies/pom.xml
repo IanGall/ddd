@@ -83,11 +83,6 @@
                 <version>${redisson.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.yitter</groupId>
-                <artifactId>yitter-idgenerator</artifactId>
-                <version>${yitter.idgenerator.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.apache.shardingsphere</groupId>
                 <artifactId>shardingsphere-jdbc</artifactId>
                 <version>${shardingsphere.version}</version>

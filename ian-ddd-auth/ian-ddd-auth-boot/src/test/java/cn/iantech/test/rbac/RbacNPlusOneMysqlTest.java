@@ -8,7 +8,7 @@ import cn.iantech.api.model.rbac.RbacPermissionDTO;
 import cn.iantech.api.model.rbac.RbacUserDTO;
 import cn.iantech.api.model.rbac.RbacUserPageDTO;
 import cn.iantech.cases.rbac.service.RbacCaseService;
-import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
 import cn.iantech.redis.IRedisService;
 import cn.iantech.test.nplusone.DetectNPlusOne;
 import cn.iantech.trigger.context.ActorResolver;
@@ -30,7 +30,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 /**
@@ -124,9 +123,8 @@ class RbacNPlusOneMysqlTest extends RbacMysqlTestSupport {
          * 固定自增 ID，避免用例依赖 Redis 租约的全局 ID 生成器。
          */
         @Bean
-        public GlobalIdGenerator globalIdGenerator() {
-            AtomicLong sequence = new AtomicLong(1_000_000L);
-            return sequence::incrementAndGet;
+        public GlobalIdGeneratorProvider globalIdGeneratorProvider() {
+            return new FixedGlobalIdGeneratorProvider();
         }
 
         @Bean

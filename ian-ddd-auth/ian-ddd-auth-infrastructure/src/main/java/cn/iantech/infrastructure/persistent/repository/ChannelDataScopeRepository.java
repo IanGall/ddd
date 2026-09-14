@@ -2,19 +2,25 @@ package cn.iantech.infrastructure.persistent.repository;
 
 import cn.iantech.domain.channel.infra.IChannelDataScopeRepository;
 import cn.iantech.domain.channel.model.ChannelDataScope;
-import cn.iantech.id.GlobalIdGenerator;
 import cn.iantech.infrastructure.persistent.dao.IChannelDataScopeDao;
 import cn.iantech.infrastructure.persistent.po.ChannelDataScopePO;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+/**
+ * 渠道数据范围仓储。
+ *
+ * <p>数据范围是渠道凭证的从属数据：ID 不出服务、不被任何表引用、领域模型也不携带自身 ID，
+ * 因此主键交由数据库自增，不需要全局 ID 生成器。
+ */
 @Repository
-@RequiredArgsConstructor
 public class ChannelDataScopeRepository implements IChannelDataScopeRepository {
     private final IChannelDataScopeDao dao;
-    private final GlobalIdGenerator globalIdGenerator;
+
+    public ChannelDataScopeRepository(IChannelDataScopeDao dao) {
+        this.dao = dao;
+    }
 
     @Override
     public List<ChannelDataScope> findEnabledByChannelId(Long channelId, String scopeType) {
@@ -39,7 +45,6 @@ public class ChannelDataScopeRepository implements IChannelDataScopeRepository {
 
     private ChannelDataScopePO toPo(Long channelId, String scopeType, String scopeValue, Long operatorUserId) {
         ChannelDataScopePO po = new ChannelDataScopePO();
-        po.setId(globalIdGenerator.nextId());
         po.setChannelId(channelId);
         po.setScopeType(scopeType);
         po.setScopeValue(scopeValue);

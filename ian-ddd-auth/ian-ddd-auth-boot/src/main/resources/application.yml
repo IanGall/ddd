@@ -18,6 +18,17 @@ auth:
       refresh-token-timeout: ${AUTH_REFRESH_TOKEN_TIMEOUT:2592000}
 
 # 所有业务实例必须连接同一 Redis，并共享该命名空间以保证 ID 全局唯一。
+# businesses 只支持在 YAML 中声明（映射键无法用环境变量覆盖）：
+# 块序号 i 占用 Worker ID 区间 [i * worker-id-block-size, (i + 1) * worker-id-block-size)，
+# 因此每个业务的副本数不得超过 worker-id-block-size。
+# channel_data_scope 已改为数据库自增，不再需要业务块。
 ddd:
   id-generator:
     namespace: ${DDD_ID_GENERATOR_NAMESPACE:ddd-global-id}
+    worker-id-block-size: 64
+    businesses:
+      auth-session: 0
+      rbac-account: 1
+      rbac-user: 2
+      customer-user: 3
+      channel-credential: 4

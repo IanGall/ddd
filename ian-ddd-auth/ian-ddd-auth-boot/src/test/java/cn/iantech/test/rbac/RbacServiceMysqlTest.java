@@ -9,7 +9,7 @@ import cn.iantech.cases.rbac.service.RbacCaseService;
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.auth.service.IAdminIdentityAuthenticator;
-import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
 import cn.iantech.redis.IRedisService;
 import cn.iantech.trigger.context.ActorResolver;
 import cn.iantech.trigger.convertor.RbacCommandConvertor;
@@ -34,7 +34,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 @SpringBootTest(classes = IanDddAuthApplication.class)
@@ -436,9 +435,8 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
     static class RbacServiceTestConfiguration {
 
         @Bean
-        public GlobalIdGenerator globalIdGenerator() {
-            AtomicLong sequence = new AtomicLong(1_000_000L);
-            return sequence::incrementAndGet;
+        public GlobalIdGeneratorProvider globalIdGeneratorProvider() {
+            return new FixedGlobalIdGeneratorProvider();
         }
 
         /**

@@ -16,6 +16,11 @@ import java.util.stream.Stream;
 
 /**
  * 通过 Redis 原子脚本持有一个 Worker ID 租约。
+ *
+ * <p>租约只在给定的 Worker ID 区间内轮询：默认区间是整个池，业务模式下是
+ * {@code [businessIndex * blockSize, (businessIndex + 1) * blockSize)}。
+ * lease 键与位宽键始终按 namespace 共享，因此区间只是容量与扫描范围的约束，
+ * Worker ID 的排他性仍由 {@code SET NX} 仲裁。
  */
 final class RedisWorkerLease implements AutoCloseable {
 
@@ -29,10 +34,11 @@ final class RedisWorkerLease implements AutoCloseable {
 
     private static final String ACQUIRE_SCRIPT = """
             local cursor = redis.call('INCR', KEYS[1])
-            local poolSize = tonumber(ARGV[1])
-            local leaseMillis = tonumber(ARGV[2])
-            local owner = ARGV[3]
-            local layout = ARGV[4]
+            local rangeStart = tonumber(ARGV[1])
+            local rangeCount = tonumber(ARGV[2])
+            local leaseMillis = tonumber(ARGV[3])
+            local owner = ARGV[4]
+            local layout = ARGV[5]
             local currentLayout = redis.call('GET', KEYS[2])
             if currentLayout and currentLayout ~= layout then
                 return -2
@@ -40,10 +46,10 @@ final class RedisWorkerLease implements AutoCloseable {
             if not currentLayout then
                 redis.call('SET', KEYS[2], layout)
             end
-            for offset = 0, poolSize - 1 do
-                local workerId = (cursor - 1 + offset) % poolSize
-                local leaseKey = KEYS[3 + workerId]
-                local acquired = redis.call('SET', leaseKey, owner, 'NX', 'PX', leaseMillis)
+            for offset = 0, rangeCount - 1 do
+                local slot = (cursor - 1 + offset) % rangeCount
+                local workerId = rangeStart + slot
+                local acquired = redis.call('SET', KEYS[3 + slot], owner, 'NX', 'PX', leaseMillis)
                 if acquired then
                     redis.call('SET', KEYS[1], cursor + offset)
                     return workerId
@@ -83,11 +89,31 @@ final class RedisWorkerLease implements AutoCloseable {
     private final int workerId;
 
     RedisWorkerLease(IRedisService redisService, IdGeneratorProperties properties) {
-        this(redisService, properties, System::nanoTime, UUID.randomUUID().toString());
+        this(redisService, properties, defaultCursorKey(properties), 0,
+                properties.workerPoolSize(), System::nanoTime, UUID.randomUUID().toString());
     }
 
     RedisWorkerLease(IRedisService redisService, IdGeneratorProperties properties,
                      LongSupplier nanoTime, String ownerToken) {
+        this(redisService, properties, defaultCursorKey(properties), 0,
+                properties.workerPoolSize(), nanoTime, ownerToken);
+    }
+
+    /**
+     * 为指定业务块租用一个 Worker ID。
+     *
+     * <p>块 {@code i} 可用区间为 {@code [i * blockSize, (i + 1) * blockSize)}，
+     * 各业务块的 lease 键与位宽键共享，因此 Worker ID 排他性与位宽一致性仍由同一 namespace 仲裁。
+     */
+    static RedisWorkerLease forBlock(IRedisService redisService, IdGeneratorProperties properties,
+                                     int businessIndex) {
+        return new RedisWorkerLease(redisService, properties, blockCursorKey(properties, businessIndex),
+                properties.blockStart(businessIndex), properties.getWorkerIdBlockSize(),
+                System::nanoTime, UUID.randomUUID().toString());
+    }
+
+    RedisWorkerLease(IRedisService redisService, IdGeneratorProperties properties, String cursorKey,
+                     int rangeStart, int rangeCount, LongSupplier nanoTime, String ownerToken) {
         this.redisService = Objects.requireNonNull(redisService, "Redis 服务不能为空");
         Objects.requireNonNull(properties, "ID 生成器配置不能为空").validate();
         this.nanoTime = Objects.requireNonNull(nanoTime, "单调时钟不能为空");
@@ -96,11 +122,10 @@ final class RedisWorkerLease implements AutoCloseable {
         this.localSafetyNanos = leaseDuration.minus(properties.getRenewInterval()).toNanos();
         this.leaseMillis = leaseDuration.toMillis();
 
-        String prefix = "{" + properties.getNamespace() + "}:worker";
-        String cursorKey = prefix + ":cursor";
+        String prefix = workerPrefix(properties);
         String layoutKey = prefix + ":layout";
-        List<String> leaseKeys = IntStream.range(0, properties.workerPoolSize())
-                .mapToObj(workerId -> prefix + ":lease:" + workerId)
+        List<String> leaseKeys = IntStream.range(0, rangeCount)
+                .mapToObj(slot -> prefix + ":lease:" + (rangeStart + slot))
                 .toList();
 
         Long acquiredWorkerId;
@@ -108,23 +133,37 @@ final class RedisWorkerLease implements AutoCloseable {
         try {
             acquiredWorkerId = redisService.executeLongScript(
                     ACQUIRE_SCRIPT,
-                    Stream.concat(Stream.of(cursorKey, layoutKey), leaseKeys.stream())
-                            .toList(),
-                    List.of(properties.workerPoolSize(), leaseMillis, ownerToken,
-                            layout(properties)));
+                    Stream.concat(Stream.of(cursorKey, layoutKey), leaseKeys.stream()).toList(),
+                    List.of(rangeStart, rangeCount, leaseMillis, ownerToken, layout(properties)));
         } catch (RuntimeException exception) {
             throw new IdGenerationException("无法从 Redis 获取 Worker ID 租约", exception);
         }
         if (Long.valueOf(ACQUIRE_LAYOUT_MISMATCH).equals(acquiredWorkerId)) {
             throw new IdGenerationException("当前命名空间已使用不同的 Worker ID 与序列位宽");
         }
-        if (acquiredWorkerId == null || acquiredWorkerId < 0
-                || acquiredWorkerId >= properties.workerPoolSize()) {
-            throw new IdGenerationException("没有可用的 Worker ID 租约");
+        if (acquiredWorkerId == null || acquiredWorkerId == -1L) {
+            throw new IdGenerationException("没有可用的 Worker ID 租约，区间 ["
+                    + rangeStart + ", " + (rangeStart + rangeCount) + ")");
+        }
+        if (acquiredWorkerId < rangeStart || acquiredWorkerId >= rangeStart + rangeCount) {
+            throw new IdGenerationException("Redis 返回了区间外的 Worker ID：" + acquiredWorkerId
+                    + "，区间 [" + rangeStart + ", " + (rangeStart + rangeCount) + ")");
         }
         this.workerId = Math.toIntExact(acquiredWorkerId);
-        this.leaseKey = leaseKeys.get(workerId);
+        this.leaseKey = leaseKeys.get(workerId - rangeStart);
         extendLocalSafetyPeriod(requestStartedNanos);
+    }
+
+    static String defaultCursorKey(IdGeneratorProperties properties) {
+        return workerPrefix(properties) + ":cursor";
+    }
+
+    static String blockCursorKey(IdGeneratorProperties properties, int businessIndex) {
+        return workerPrefix(properties) + ":cursor:" + businessIndex;
+    }
+
+    private static String workerPrefix(IdGeneratorProperties properties) {
+        return "{" + properties.getNamespace() + "}:worker";
     }
 
     int workerId() {

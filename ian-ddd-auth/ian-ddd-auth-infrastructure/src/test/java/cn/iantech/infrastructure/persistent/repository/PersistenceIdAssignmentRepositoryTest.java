@@ -5,6 +5,7 @@ import cn.iantech.domain.customer.model.CustomerUserEntity;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
 import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
 import cn.iantech.infrastructure.persistent.dao.*;
 import cn.iantech.infrastructure.persistent.po.*;
 import io.github.linpeilie.Converter;
@@ -18,7 +19,21 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.*;
 
-class PersistenceGlobalIdRepositoryTest {
+class PersistenceIdAssignmentRepositoryTest {
+
+    /** 各业务共用同一个假生成器，本用例只关心「保存前先取 ID」的时序。 */
+    private static GlobalIdGeneratorProvider providerOf(GlobalIdGenerator generator) {
+        return new GlobalIdGeneratorProvider() {
+            @Override
+            public GlobalIdGenerator forBusiness(String business) {
+                return generator;
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+    }
 
     @Test
     void shouldGenerateIdBeforeSavingRbacAccount() {
@@ -32,7 +47,7 @@ class PersistenceGlobalIdRepositoryTest {
         when(converter.convert(same(po), eq(RbacAccountEntity.class))).thenReturn(saved);
         when(generator.nextId()).thenReturn(101L);
 
-        RbacAccountEntity result = new RbacAccountRepository(dao, converter, generator).save(entity);
+        RbacAccountEntity result = new RbacAccountRepository(dao, converter, providerOf(generator)).save(entity);
 
         assertEquals(101L, po.getId());
         assertEquals(101L, result.getId());
@@ -52,7 +67,7 @@ class PersistenceGlobalIdRepositoryTest {
         when(converter.convert(same(po), eq(RbacAccountEntity.class))).thenReturn(saved);
         when(generator.nextId()).thenReturn(105L);
 
-        new RbacAccountRepository(dao, converter, generator).save(entity);
+        new RbacAccountRepository(dao, converter, providerOf(generator)).save(entity);
 
         assertEquals(105L, po.getId());
         verify(generator).nextId();
@@ -70,7 +85,7 @@ class PersistenceGlobalIdRepositoryTest {
         when(converter.convert(same(po), eq(RbacUserEntity.class))).thenReturn(saved);
         when(generator.nextId()).thenReturn(102L);
 
-        new RbacUserRepository(dao, converter, generator).save(10L, entity);
+        new RbacUserRepository(dao, converter, providerOf(generator)).save(10L, entity);
 
         assertEquals(102L, po.getId());
         assertEquals(10L, po.getAccountId());
@@ -89,7 +104,7 @@ class PersistenceGlobalIdRepositoryTest {
         when(converter.convert(same(po), eq(CustomerUserEntity.class))).thenReturn(saved);
         when(generator.nextId()).thenReturn(103L);
 
-        new CustomerUserRepository(dao, converter, generator).save(entity);
+        new CustomerUserRepository(dao, converter, providerOf(generator)).save(entity);
 
         assertEquals(103L, po.getId());
         verify(dao).insert(same(po));
@@ -105,7 +120,7 @@ class PersistenceGlobalIdRepositoryTest {
         when(converter.convert(same(entity), eq(ChannelCredentialPO.class))).thenReturn(po);
         when(generator.nextId()).thenReturn(104L);
 
-        ChannelCredentialEntity result = new ChannelCredentialRepository(dao, converter, generator).save(entity);
+        ChannelCredentialEntity result = new ChannelCredentialRepository(dao, converter, providerOf(generator)).save(entity);
 
         assertEquals(104L, po.getId());
         assertEquals(104L, result.getId());
@@ -113,19 +128,17 @@ class PersistenceGlobalIdRepositoryTest {
     }
 
     @Test
-    void shouldGenerateUniqueIdsForChannelDataScopeBatch() {
+    void shouldLeaveChannelDataScopeIdToDatabase() {
         IChannelDataScopeDao dao = mock(IChannelDataScopeDao.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
-        when(generator.nextId()).thenReturn(201L, 202L, 203L);
 
-        new ChannelDataScopeRepository(dao, generator)
-                .replace(20L, "STORE", List.of("A", "B", "C"), 30L);
+        new ChannelDataScopeRepository(dao).replace(20L, "STORE", List.of("A", "B", "C"), 30L);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ChannelDataScopePO>> captor = ArgumentCaptor.forClass(List.class);
         verify(dao).insertBatch(captor.capture());
         List<ChannelDataScopePO> items = captor.getValue();
-        assertIterableEquals(List.of(201L, 202L, 203L), items.stream().map(ChannelDataScopePO::getId).toList());
+        // 主键由数据库自增，应用不赋 ID
+        assertTrue(items.stream().allMatch(item -> item.getId() == null));
         assertIterableEquals(List.of("A", "B", "C"), items.stream().map(ChannelDataScopePO::getScopeValue).toList());
         items.forEach(item -> {
             assertEquals(20L, item.getChannelId());

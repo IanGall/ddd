@@ -1,5 +1,6 @@
 CREATE TABLE customer_user (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- ID 由应用通过全局 ID 生成器赋值（CustomerUserDTO.id 对外暴露），不使用自增
+    id BIGINT PRIMARY KEY,
     login_name VARCHAR(64) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(128) NOT NULL DEFAULT '',
@@ -15,7 +16,8 @@ CREATE TABLE customer_user (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE channel_credential (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- ID 由应用通过全局 ID 生成器赋值（ChannelCredentialDTO.id 对外暴露），不使用自增
+    id BIGINT PRIMARY KEY,
     channel_code VARCHAR(64) NOT NULL,
     channel_name VARCHAR(128) NOT NULL,
     secret_ciphertext VARBINARY(512) NOT NULL,
