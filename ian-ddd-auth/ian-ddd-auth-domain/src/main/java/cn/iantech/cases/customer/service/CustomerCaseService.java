@@ -6,9 +6,7 @@ import cn.iantech.domain.auth.infra.IPasswordEncoder;
 import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 
@@ -21,7 +19,14 @@ public class CustomerCaseService {
     private final ICustomerUserRepository repository;
     private final IPasswordEncoder passwordEncoder;
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * C 端注册。
+     *
+     * <p>刻意**不加** {@code @Transactional}：本方法只有一次 INSERT，单语句自身即原子，
+     * 而 BCrypt 慢哈希（约 100ms）若处在事务内会一直占用连接池连接——匿名注册是唯一
+     * 无需认证即可触发的入口，长事务会被少量并发直接放大为连接池耗尽。
+     * 登录名重复由 {@code uk_customer_user_login_name} 唯一索引兜底（见仓储实现）。</p>
+     */
     public CustomerUserEntity register(CustomerRegisterCommand command) {
         if (command == null) {
             throw new AppException("INVALID_ARGUMENT", "请求不能为空");
@@ -31,15 +36,10 @@ public class CustomerCaseService {
         if (repository.findByLoginName(normalized).isPresent()) {
             throw new AppException("INVALID_ARGUMENT", "登录账号已注册");
         }
-        try {
-            return repository.save(CustomerUserEntity.builder().loginName(normalized)
-                    .passwordHash(passwordEncoder.encode(command.password()))
-                    .displayName(command.displayName() == null ? "" : command.displayName())
-                    .status(true).deleted(false).build());
-        } catch (DuplicateKeyException exception) {
-            // 并发注册命中 uk_customer_user_login_name，避免裸 DuplicateKeyException 直接 500
-            throw new AppException("INVALID_ARGUMENT", "登录账号已注册");
-        }
+        return repository.save(CustomerUserEntity.builder().loginName(normalized)
+                .passwordHash(passwordEncoder.encode(command.password()))
+                .displayName(command.displayName() == null ? "" : command.displayName())
+                .status(true).deleted(false).build());
     }
 
     public CustomerUserEntity authenticate(String loginName, String password) {

@@ -1,5 +1,6 @@
 package cn.iantech.infrastructure.persistent.repository;
 
+import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import cn.iantech.id.GlobalIdGenerator;
@@ -7,9 +8,12 @@ import cn.iantech.infrastructure.persistent.dao.ICustomerUserDao;
 import cn.iantech.infrastructure.persistent.po.CustomerUserPO;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+
+import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 @Repository
 @RequiredArgsConstructor
@@ -26,7 +30,13 @@ public class CustomerUserRepository implements ICustomerUserRepository {
         if (po.getAvatar() == null) {
             po.setAvatar("");
         }
-        dao.insert(po);
+        try {
+            dao.insert(po);
+        } catch (DuplicateKeyException exception) {
+            // 并发注册时由 uk_customer_user_login_name 兜底；在此收口为业务异常，
+            // 应用层（cases）无需感知具体的持久化技术栈
+            throw new AppException(INVALID_ARGUMENT.getCode(), "登录账号已注册");
+        }
         return converter.convert(po, CustomerUserEntity.class);
     }
 

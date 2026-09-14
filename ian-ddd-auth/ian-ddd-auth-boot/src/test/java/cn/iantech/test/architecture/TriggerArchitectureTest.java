@@ -19,7 +19,9 @@ class TriggerArchitectureTest {
     private static final List<Class<?>> RPC_ADAPTERS = List.of(AuthService.class, ChannelCredentialService.class,
             CustomerService.class, PlatformAccountService.class, RbacService.class);
     private static final List<String> CASES_FORBIDDEN_IMPORTS = List.of("cn.iantech.api.", "cn.iantech.context.",
-            "cn.iantech.trigger.", "cn.iantech.infrastructure.", "org.apache.dubbo.");
+            "cn.iantech.trigger.", "cn.iantech.infrastructure.", "org.apache.dubbo.",
+            // 应用层不得绑定具体持久化技术栈：唯一键冲突等语义必须由 infrastructure 的仓储实现收口为业务异常
+            "org.springframework.dao.", "org.springframework.jdbc.");
     private static final List<String> DOMAIN_FORBIDDEN_IMPORTS = List.of("cn.iantech.cases.",
             "cn.iantech.api.", "cn.iantech.context.", "cn.iantech.trigger.", "cn.iantech.infrastructure.",
             "org.apache.dubbo.", "org.mybatis.", "org.redisson.", "jakarta.servlet.", "javax.servlet.",
