@@ -15,7 +15,7 @@ ian-ddd-api/                          # 聚合 POM（packaging=pom）
 │           └── model.{auth,rbac,channel,customer}   # 请求/响应 DTO
 └── ian-ddd-api-external/             # 外部 API：对外/第三方 HTTP 契约（声明式 @HttpExchange）
     └── cn.iantech.api.external
-        ├── sample                    # 骨架示例（可删）
+        ├── sample                    # @HttpExchange 契约示例；同时是 ExternalApiClientFactory 的测试夹具
         └── support                   # ExternalApiClientFactory（RestClient 生成代理）
 ```
 
