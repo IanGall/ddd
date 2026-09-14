@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * RBAC 用例无关的入参校验与归一化工具。
@@ -21,17 +22,24 @@ final class RbacValidationSupport {
     static final int DEFAULT_PAGE_NUM = 1;
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
+    /** pageNum 上界：防止 (pageNum - 1) * pageSize 整型溢出为负 offset，导致 SQL 语法错误。 */
+    static final int MAX_PAGE_NUM = 10_000;
     static final int DEFAULT_PERM_TYPE = 2;
     static final int MIN_PASSWORD_BYTES = 8;
     static final int MAX_PASSWORD_BYTES = 72;
     static final String SYSTEM_PERMISSION_PREFIX = "rbac:";
     static final Set<Integer> VALID_PERM_TYPES = Set.of(1, 2, 3);
+    /** 用户名/主账号名规则唯一来源：此处改动即对全部 RBAC 入口生效。 */
+    static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,64}$");
 
     private RbacValidationSupport() {
     }
 
     static Integer normalizePageNum(Integer pageNum) {
-        return Objects.nonNull(pageNum) && pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
+        if (Objects.isNull(pageNum) || pageNum <= 0) {
+            return DEFAULT_PAGE_NUM;
+        }
+        return Math.min(pageNum, MAX_PAGE_NUM);
     }
 
     static Integer normalizePageSize(Integer pageSize) {

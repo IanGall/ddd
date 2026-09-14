@@ -11,10 +11,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.SYSTEM_PERMISSION_PREFIX;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.USERNAME_PATTERN;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkAccountId;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkCustomPermission;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPassword;
@@ -48,7 +48,6 @@ public class RbacDomainService {
     private static final int MAX_PERMISSION_NAME_LENGTH = 128;
     private static final int MAX_PERMISSION_PATH_LENGTH = 255;
     private static final int MAX_HTTP_METHOD_LENGTH = 32;
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,64}$");
 
     private final IRbacUserRepository rbacUserRepository;
     private final IRbacRoleRepository rbacRoleRepository;
