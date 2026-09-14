@@ -47,7 +47,10 @@
 - Gateway HTTP 路径只使用 `/api/admin/**`、`/api/app/**`、`/api/external/**` 三类前缀，不保留旧路径。
 - 管理端和 C 端分别使用 `/api/admin/auth/**`、`/api/app/auth/**`；刷新请求必须通过 `expectedSubjectType`
   声明 `ADMIN` 或 `CUSTOMER`，Auth 在轮换前校验 Session 主体。
-- `/api/external/**` 使用渠道 HMAC，认证身份的授权范围固定为 `external:access`。
+- `/api/external/**` 使用渠道 HMAC，认证身份的授权范围固定为 `external:access`。渠道协议的取值统一收敛在
+  `Constants`（`ChannelAuth` 的时钟偏移窗口与防重放 TTL、`AuthScope.EXTERNAL_ACCESS`、`TokenKind.CHANNEL_HMAC`），
+  面向对接方的协议说明与示例见 `ian-ddd-gateway/README.md` 的「渠道 HMAC 请求」章节——此处刻意不重复具体数值，
+  避免同一参数在文档中出现第二份副本。
 - `rbac:*` 为系统权限前缀，系统权限只能由部署 SQL 和主账号初始化流程创建，运行时禁止更新、禁用或删除。
 - `POST /api/admin/platform/accounts` 的 `X-Platform-Token` 由 Provider 最终校验，Gateway 只负责转发。
 - Dubbo 身份上下文仅依赖私网、注册中心权限和网络白名单；`source=gateway` 不具备密码学防伪能力，Dubbo 端口禁止暴露到公网。

@@ -34,6 +34,25 @@ public class Constants {
         }
     }
 
+    /**
+     * 渠道 HMAC 协议的校验参数。
+     *
+     * <p>由认证服务在实际校验时使用，并作为面向对接方的协议说明（{@code ian-ddd-gateway/README.md}
+     * 的「渠道 HMAC 请求」章节）的唯一取值来源——该章节的取值由 {@code GatewayChannelHmacDocContractTest}
+     * 与本类逐项比对，改动此处必须同步文档。</p>
+     */
+    public static final class ChannelAuth {
+
+        /** 允许的客户端时钟偏移（秒）：超出该窗口的请求一律拒绝。 */
+        public static final int CLOCK_SKEW_SECONDS = 300;
+
+        /** 防重放登记时长（秒）：同一 channelCode + signature 在该窗口内只允许成功一次。 */
+        public static final long REPLAY_TTL_SECONDS = 600;
+
+        private ChannelAuth() {
+        }
+    }
+
     @AllArgsConstructor
     @NoArgsConstructor
     @Getter

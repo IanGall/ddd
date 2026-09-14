@@ -30,8 +30,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ChannelAuthCaseService {
     private static final String PLATFORM_CLIENT_SUBJECT_TYPE = "PLATFORM_CLIENT";
-    private static final long ALLOWED_CLOCK_SKEW_SECONDS = 300;
-    private static final Duration REPLAY_TTL = Duration.ofSeconds(600);
     private static final int CANONICAL_LINES = 8;
     private static final int MAX_CANONICAL_LENGTH = 16 * 1024;
     private static final Pattern CHANNEL_CODE = Pattern.compile("ch_[A-Za-z0-9_-]{22}");
@@ -59,7 +57,7 @@ public class ChannelAuthCaseService {
             throw unauthorized();
         }
         String replayKey = Sha256.hex(command.channelCode() + ":" + command.signature());
-        if (!replayStore.markIfAbsent(replayKey, REPLAY_TTL)) {
+        if (!replayStore.markIfAbsent(replayKey, Duration.ofSeconds(Constants.ChannelAuth.REPLAY_TTL_SECONDS))) {
             throw unauthorized();
         }
         return new IdentityResult(null, null, credential.getChannelCode(), null, PLATFORM_CLIENT_SUBJECT_TYPE,
@@ -94,7 +92,8 @@ public class ChannelAuthCaseService {
 
     private boolean outsideAllowedTimeWindow(long timestamp) {
         long now = Instant.now().getEpochSecond();
-        return timestamp < now - ALLOWED_CLOCK_SKEW_SECONDS || timestamp > now + ALLOWED_CLOCK_SKEW_SECONDS;
+        return timestamp < now - Constants.ChannelAuth.CLOCK_SKEW_SECONDS
+                || timestamp > now + Constants.ChannelAuth.CLOCK_SKEW_SECONDS;
     }
 
     private byte[] hmac(String secret, String canonicalRequest) {

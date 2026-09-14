@@ -19,8 +19,10 @@ import java.util.stream.Stream;
  * <p>渠道方是照 README 实现签名的，这些字符串与数值就是接口本身：重命名常量、调整 Body 上限或改授权范围
  * 却漏改文档，会让对接方按过期协议实现，而单侧编译与测试都不会报错。故把两侧绑进构建。</p>
  *
- * <p>只比对可从 gateway-core 侧直接引用的常量，因此校验「五个请求头名 + 授权范围 + Body 上限」；
- * 时钟偏移窗口（±300s）与防重放 TTL（600s）的常量位于认证服务，跨模块引用会制造第三份副本，故不在此守护。</p>
+ * <p>被比对的值统一收敛在 {@code cn.iantech.common.constant.Constants}：
+ * 请求头名与 Body 上限在 {@link ChannelCanonicalRequest}，授权范围在 {@code Constants.AuthScope}，
+ * 时钟偏移窗口与防重放 TTL 在 {@code Constants.ChannelAuth}（原为认证服务的私有常量，
+ * 已上移共享，避免「值在认证服务、文档在网关」的错位）。</p>
  */
 class GatewayChannelHmacDocContractTest {
 
@@ -60,6 +62,21 @@ class GatewayChannelHmacDocContractTest {
                         + "（应与 ChannelCanonicalRequest.MAX_BODY_MIB 一致）");
     }
 
+    @Test
+    void documentedTimeWindowAndReplayTtlMustMatchConstants() throws IOException {
+        String section = normalizedHmacSection();
+
+        String clockSkew = Constants.ChannelAuth.CLOCK_SKEW_SECONDS + " 秒";
+        String replayTtl = Constants.ChannelAuth.REPLAY_TTL_SECONDS + " 秒";
+
+        Assertions.assertTrue(section.contains(clockSkew),
+                () -> "README 渠道 HMAC 章节未写明允许的时钟偏移 " + clockSkew
+                        + "（应与 Constants.ChannelAuth.CLOCK_SKEW_SECONDS 一致）");
+        Assertions.assertTrue(section.contains(replayTtl),
+                () -> "README 渠道 HMAC 章节未写明防重放登记时长 " + replayTtl
+                        + "（应与 Constants.ChannelAuth.REPLAY_TTL_SECONDS 一致）");
+    }
+
     /** 取渠道 HMAC 章节内 ```http 代码块的内容行。 */
     private List<String> headerSampleBlock() throws IOException {
         List<String> section = hmacSectionLines();
@@ -80,6 +97,11 @@ class GatewayChannelHmacDocContractTest {
 
     private String hmacSection() throws IOException {
         return String.join("\n", hmacSectionLines());
+    }
+
+    /** README 按列宽硬换行（如「登记 600\n秒」），比较数值前先归一化空白。 */
+    private String normalizedHmacSection() throws IOException {
+        return hmacSection().replaceAll("\\s+", " ");
     }
 
     /** 从章节标题开始，取到下一个同级标题为止。 */

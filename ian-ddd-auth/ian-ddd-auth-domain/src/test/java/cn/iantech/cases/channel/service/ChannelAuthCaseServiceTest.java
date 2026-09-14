@@ -1,6 +1,7 @@
 package cn.iantech.cases.channel.service;
 
 import cn.iantech.cases.channel.model.ChannelCaseModels.SignatureCommand;
+import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.channel.infra.ChannelEncryptedSecret;
 import cn.iantech.domain.channel.infra.IChannelCredentialRepository;
@@ -58,7 +59,8 @@ class ChannelAuthCaseServiceTest {
         service.authenticate(command);
         assertThrows(AppException.class, () -> service.authenticate(command));
         assertThrows(AppException.class, () -> service((key, ttl) -> true)
-                .authenticate(signedCommand(Instant.now().minusSeconds(301).getEpochSecond(), "0".repeat(64))));
+                .authenticate(signedCommand(Instant.now().minusSeconds(Constants.ChannelAuth.CLOCK_SKEW_SECONDS + 1L)
+                        .getEpochSecond(), "0".repeat(64))));
     }
 
     private ChannelAuthCaseService service(IChannelReplayStore replayStore) {
