@@ -128,16 +128,18 @@ HTTP 错误统一返回 `{"code","info","data"}`，并保留 `X-Request-Id`。�
 | `INVALID_ARGUMENT`                    |         400 |
 | `AUTH_REQUIRED`                       |         401 |
 | `ACCESS_DENIED`                       |         403 |
-| `AUTH_REFRESH_BUSY`                   |         409 |
+| `NOT_FOUND`                           |         404 |
+| `CONFLICT`                            |         409 |
+| `PAYLOAD_TOO_LARGE`                   |         413 |
 | `AUTH_RATE_LIMITED`                   |         429 |
-| 其他明确业务异常                      |         422 |
 | `RPC_ERROR`                           |         502 |
 | `AUTH_UNAVAILABLE`、`RPC_NO_PROVIDER` |         503 |
 | `RPC_TIMEOUT`                         |         504 |
 | `INTERNAL_ERROR`                      |         500 |
 
-> `AUTH_REFRESH_BUSY` 是**保留语义码，当前实现不会返回**：刷新令牌并发提交按上文「重放」语义处理（撤销整个设备会话族并返回
-> `AUTH_REQUIRED`）。客户端不应针对该码编写重试逻辑。
+> 上表与 `cn.iantech.common.constant.Constants.ResponseCode` 一一对应，该枚举是语义码的唯一来源。Auth 侧抛出的
+> `AppException` 若携带枚举中**未登记**的码，网关按 `INTERNAL_ERROR`(500) 处理并记录「网关收到未登记的响应码」告警——
+> 业务异常必须使用已登记的语义码，不存在「其他明确业务异常」这类兜底映射。
 >
 > `AUTH_RATE_LIMITED` 覆盖两处按 IP 限流：登录入口 30 次/分钟/IP；C 端注册入口 10 次/分钟/IP（两者各自计数，互不占用额度）。
 

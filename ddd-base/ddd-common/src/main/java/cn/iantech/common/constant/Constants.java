@@ -45,7 +45,6 @@ public class Constants {
         PAYLOAD_TOO_LARGE("PAYLOAD_TOO_LARGE", "请求体超过上限", 413),
         AUTH_REQUIRED("AUTH_REQUIRED", "需要认证", 401),
         AUTH_UNAVAILABLE("AUTH_UNAVAILABLE", "认证服务暂不可用", 503),
-        AUTH_REFRESH_BUSY("AUTH_REFRESH_BUSY", "刷新请求处理中，请稍后重试", 409),
         AUTH_RATE_LIMITED("AUTH_RATE_LIMITED", "登录尝试过于频繁，请稍后重试", 429),
         ACCESS_DENIED("ACCESS_DENIED", "无权访问", 403),
         RPC_ERROR("RPC_ERROR", "下游服务调用失败", 502),

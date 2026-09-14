@@ -13,5 +13,4 @@
     <select id="selectByLoginName" resultMap="dataMap">SELECT id,login_name,password_hash,display_name,avatar,status,deleted,password_changed_at,last_login_at,create_time,update_time FROM customer_user WHERE login_name=#{loginName} AND deleted=0 LIMIT 1</select>
     <select id="selectById" resultMap="dataMap">SELECT id,login_name,password_hash,display_name,avatar,status,deleted,password_changed_at,last_login_at,create_time,update_time FROM customer_user WHERE id=#{id} AND deleted=0 LIMIT 1</select>
     <update id="updateLastLoginAt">UPDATE customer_user SET last_login_at=NOW() WHERE id=#{id} AND deleted=0</update>
-    <update id="updatePassword">UPDATE customer_user SET password_hash=#{passwordHash},password_changed_at=NOW(),update_time=NOW() WHERE id=#{id} AND deleted=0</update>
 </mapper>

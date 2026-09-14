@@ -54,9 +54,4 @@ public class CustomerUserRepository implements ICustomerUserRepository {
     public void updateLastLoginAt(Long id) {
         dao.updateLastLoginAt(id);
     }
-
-    @Override
-    public void updatePassword(Long id, String passwordHash) {
-        dao.updatePassword(id, passwordHash);
-    }
 }

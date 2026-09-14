@@ -13,6 +13,4 @@ public interface ICustomerUserDao {
     CustomerUserPO selectById(@Param("id") Long id);
 
     int updateLastLoginAt(@Param("id") Long id);
-
-    int updatePassword(@Param("id") Long id, @Param("passwordHash") String passwordHash);
 }

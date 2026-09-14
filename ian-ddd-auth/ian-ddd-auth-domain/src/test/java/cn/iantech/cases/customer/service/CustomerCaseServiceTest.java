@@ -151,11 +151,6 @@ class CustomerCaseServiceTest {
         public void updateLastLoginAt(Long id) {
             // 注册用例不涉及
         }
-
-        @Override
-        public void updatePassword(Long id, String passwordHash) {
-            // 注册用例不涉及
-        }
     }
 
     private static final class PrefixPasswordEncoder implements IPasswordEncoder {

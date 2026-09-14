@@ -12,6 +12,4 @@ public interface ICustomerUserRepository {
     Optional<CustomerUserEntity> findById(Long id);
 
     void updateLastLoginAt(Long id);
-
-    void updatePassword(Long id, String passwordHash);
 }
