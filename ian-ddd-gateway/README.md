@@ -141,6 +141,9 @@ HTTP 错误统一返回 `{"code","info","data"}`，并保留 `X-Request-Id`。�
 > `AppException` 若携带枚举中**未登记**的码，网关按 `INTERNAL_ERROR`(500) 处理并记录「网关收到未登记的响应码」告警——
 > 业务异常必须使用已登记的语义码，不存在「其他明确业务异常」这类兜底映射。
 >
+> 本表由 `gateway-core` 的 `GatewayResponseCodeContractTest` 与枚举逐项比对（含增删与状态码一致性），
+> 改动任一侧而未同步另一侧都会使构建失败。
+>
 > `AUTH_RATE_LIMITED` 覆盖两处按 IP 限流：登录入口 30 次/分钟/IP；C 端注册入口 10 次/分钟/IP（两者各自计数，互不占用额度）。
 
 客户端必须按 `SUCCESS` 等语义码判断结果，不再使用 `0000`～`0003` 数字码。认证失败只在 `AUTH_REQUIRED` 等业务码下返回；只有
