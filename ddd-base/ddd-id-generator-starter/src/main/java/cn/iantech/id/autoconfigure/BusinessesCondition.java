@@ -1,4 +1,4 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
 import org.springframework.boot.autoconfigure.condition.SpringBootCondition;

@@ -1,4 +1,4 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;

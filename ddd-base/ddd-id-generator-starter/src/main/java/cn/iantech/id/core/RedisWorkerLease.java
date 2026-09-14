@@ -1,5 +1,7 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
+import cn.iantech.id.IdGenerationException;
+import cn.iantech.id.autoconfigure.IdGeneratorProperties;
 import cn.iantech.redis.IRedisService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -154,11 +156,11 @@ final class RedisWorkerLease implements AutoCloseable {
         extendLocalSafetyPeriod(requestStartedNanos);
     }
 
-    static String defaultCursorKey(IdGeneratorProperties properties) {
+    private static String defaultCursorKey(IdGeneratorProperties properties) {
         return workerPrefix(properties) + ":cursor";
     }
 
-    static String blockCursorKey(IdGeneratorProperties properties, int businessIndex) {
+    private static String blockCursorKey(IdGeneratorProperties properties, int businessIndex) {
         return workerPrefix(properties) + ":cursor:" + businessIndex;
     }
 

@@ -1,5 +1,8 @@
-package cn.iantech.context.web;
+package cn.iantech.context.web.autoconfigure;
 
+import cn.iantech.context.web.AuthenticationContextResolver;
+import cn.iantech.context.web.ContextWebFilter;
+import cn.iantech.context.web.ResolvedAuthenticationContext;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;

@@ -1,4 +1,4 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
 /**
  * 仅在未配置 {@code ddd.id-generator.businesses} 时命中，用于注册单个全局生成器。

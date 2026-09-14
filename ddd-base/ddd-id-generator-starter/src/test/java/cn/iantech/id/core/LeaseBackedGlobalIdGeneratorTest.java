@@ -1,5 +1,7 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
+import cn.iantech.id.IdGenerationException;
+import cn.iantech.id.autoconfigure.IdGeneratorProperties;
 import cn.iantech.redis.IRedisService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

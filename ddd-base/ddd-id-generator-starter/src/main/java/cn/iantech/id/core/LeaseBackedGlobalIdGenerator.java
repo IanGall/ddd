@@ -1,5 +1,7 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
+import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.IdGenerationException;
 import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;

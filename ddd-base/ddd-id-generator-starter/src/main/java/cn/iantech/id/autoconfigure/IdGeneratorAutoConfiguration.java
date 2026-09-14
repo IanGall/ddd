@@ -1,7 +1,10 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
+import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.id.core.IdGeneratorFactory;
 import cn.iantech.redis.IRedisService;
-import cn.iantech.redis.RedisAutoConfiguration;
+import cn.iantech.redis.autoconfigure.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -27,17 +30,13 @@ public class IdGeneratorAutoConfiguration {
     @ConditionalOnMissingBean(GlobalIdGeneratorProvider.class)
     public GlobalIdGeneratorProvider globalIdGeneratorProvider(IRedisService redisService,
                                                               IdGeneratorProperties properties) {
-        return new DefaultGlobalIdGeneratorProvider(redisService, properties);
+        return IdGeneratorFactory.perBusiness(redisService, properties);
     }
 
     @Bean(destroyMethod = "close")
     @Conditional(NoBusinessesConfiguredCondition.class)
     @ConditionalOnMissingBean(GlobalIdGenerator.class)
     public GlobalIdGenerator globalIdGenerator(IRedisService redisService, IdGeneratorProperties properties) {
-        properties.validate();
-        RedisWorkerLease workerLease = new RedisWorkerLease(redisService, properties);
-        return LeaseBackedGlobalIdGenerator.withOwnScheduler(workerLease,
-                SnowflakeIdGenerator.of(workerLease.workerId(), properties),
-                properties.getRenewInterval().toMillis());
+        return IdGeneratorFactory.single(redisService, properties);
     }
 }

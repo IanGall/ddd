@@ -1,5 +1,8 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
+import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.IdGenerationException;
+import cn.iantech.id.autoconfigure.IdGeneratorProperties;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.LongSupplier;

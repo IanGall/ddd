@@ -1,1 +1,1 @@
-cn.iantech.redis.RedisAutoConfiguration
+cn.iantech.redis.autoconfigure.RedisAutoConfiguration

@@ -1,5 +1,8 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
+import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.id.IdGenerationException;
 import cn.iantech.redis.IRedisService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -186,7 +189,7 @@ class IdGeneratorAutoConfigurationTest {
         try (var input = getClass().getClassLoader().getResourceAsStream(resourceName)) {
             assertThat(input).isNotNull();
             assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8))
-                    .contains("cn.iantech.id.IdGeneratorAutoConfiguration");
+                    .contains("cn.iantech.id.autoconfigure.IdGeneratorAutoConfiguration");
         }
     }
 

@@ -1,5 +1,9 @@
-package cn.iantech.id;
+package cn.iantech.id.core;
 
+import cn.iantech.id.GlobalIdGenerator;
+import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.id.IdGenerationException;
+import cn.iantech.id.autoconfigure.IdGeneratorProperties;
 import cn.iantech.redis.IRedisService;
 
 import java.util.Comparator;

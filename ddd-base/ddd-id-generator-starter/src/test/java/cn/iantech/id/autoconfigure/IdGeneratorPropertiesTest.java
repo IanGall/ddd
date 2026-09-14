@@ -1,5 +1,6 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
+import cn.iantech.id.IdGenerationException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

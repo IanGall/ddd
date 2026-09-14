@@ -1,5 +1,6 @@
-package cn.iantech.id;
+package cn.iantech.id.autoconfigure;
 
+import cn.iantech.id.IdGenerationException;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -102,13 +103,16 @@ public class IdGeneratorProperties {
      * 业务块序号对应的 Worker ID 起始值。
      *
      * @param businessIndex 块序号，必须已通过 {@link #validate()}
-     * @return 该业务可用 Worker ID 的起始值（含）
+     * @return 该业务可用 WorkerId 的起始值（含）
      */
-    int blockStart(int businessIndex) {
+    public int blockStart(int businessIndex) {
         return businessIndex * workerIdBlockSize;
     }
 
-    void validate() {
+    /**
+     * 校验配置。构造生成器前调用，让配置错误在启动期失败而不是等到出号。
+     */
+    public void validate() {
         if (namespace == null || namespace.isBlank() || !namespace.equals(namespace.trim())
                 || namespace.indexOf('{') >= 0 || namespace.indexOf('}') >= 0
                 || namespace.indexOf(':') >= 0
@@ -177,7 +181,12 @@ public class IdGeneratorProperties {
         }
     }
 
-    int workerPoolSize() {
+    /**
+     * 本配置可提供的 WorkerId 总数。
+     *
+     * @return 池容量，等于 {@code 2^workerIdBitLength}
+     */
+    public int workerPoolSize() {
         return 1 << workerIdBitLength;
     }
 }

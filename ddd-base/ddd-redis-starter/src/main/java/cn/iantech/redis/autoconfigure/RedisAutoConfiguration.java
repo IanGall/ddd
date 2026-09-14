@@ -1,5 +1,7 @@
-package cn.iantech.redis;
+package cn.iantech.redis.autoconfigure;
 
+import cn.iantech.redis.IRedisService;
+import cn.iantech.redis.RedissonRedisService;
 import org.redisson.api.RedissonClient;
 import org.redisson.spring.starter.RedissonAutoConfigurationV4;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
