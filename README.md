@@ -38,7 +38,7 @@ ddd/
 | 组件                | 版本    | 说明                                             |
 |---------------------|---------|--------------------------------------------------|
 | JDK                 | 21      | 构建时由 Maven Enforcer 强制校验                 |
-| Spring Boot         | 4.1.0   | 各服务统一版本                                   |
+| Spring Boot         | 4.1.1   | 各服务统一版本                                   |
 | Dubbo               | 3.3.6   | Triple 协议，网关以 `@DubboReference` 调用认证服务 |
 | Nacos Client        | 3.2.3   | 注册中心                                         |
 | MyBatis Spring Boot | 4.1.0   | 持久化                                           |

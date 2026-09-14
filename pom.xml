@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <skipTests>false</skipTests>
-        <spring.boot.version>4.1.0</spring.boot.version>
+        <spring.boot.version>4.1.1</spring.boot.version>
         <mapstruct-plus.version>1.5.2</mapstruct-plus.version>
         <dubbo.version>3.3.6</dubbo.version>
         <mybatis.spring.boot.version>4.1.0</mybatis.spring.boot.version>
@@ -31,7 +31,6 @@
         <fastjson2.version>2.0.64</fastjson2.version>
         <gson.version>2.14.0</gson.version>
         <error.prone.annotations.version>2.49.0</error.prone.annotations.version>
-        <netty.version>4.2.16.Final</netty.version>
         <guava.version>33.6.0-jre</guava.version>
         <nacos.version>3.2.3</nacos.version>
         <shardingsphere.version>5.5.3</shardingsphere.version>
