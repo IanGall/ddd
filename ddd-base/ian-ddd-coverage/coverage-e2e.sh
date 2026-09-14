@@ -28,6 +28,7 @@
 #   COVERAGE_E2E_LOGIN_PASSWORD  管理员密码；不填则读取 .env.local 的同名变量
 #   COVERAGE_PLATFORM_TOKEN      平台开户令牌；与认证服务 PLATFORM_ADMIN_TOKEN 一致，不填则读取 .env.local
 #   COVERAGE_SKIP_BUILD          设为 1 跳过 clean 构建（快速重跑）
+#   COVERAGE_KEEP_SESSIONS       历史报告保留份数，默认 10；超出的旧报告在流水线结束时自动清理
 #   WORKSPACE_DIR                覆盖工作区根目录探测结果
 #   EXTRA_SERVICES               追加启动的业务服务，逗号分隔，每项格式：
 #                                  名称:项目目录:Agent端口[:健康检查URL]
@@ -567,9 +568,11 @@ run_tests() {
     if [[ ${#TEST_RUN_SESSIONS[@]} -eq 0 ]]; then
         warn "本轮未采集到任何 Session，跳过并集报告"
         merged_session=""
-        return 0
+    else
+        merge_sessions
     fi
-    merge_sessions
+    # 无论并集报告是否生成成功都清理，保证历史报告份数不超过上限
+    prune_sessions
 }
 
 # 把本轮所有 Session 的 execution data 合并成一份并集报告。
@@ -610,33 +613,45 @@ merge_sessions() {
             fail "COVERAGE_MIN_RATIO_STRICT=true：并集行覆盖率 ${ratio}% 低于 ${COVERAGE_MIN_RATIO:-40}%，判定失败"
         fi
     fi
-    prune_sessions
 }
 
-# 仅保留最近 N 个 Session（并集 Session 最新，必然被保留），避免 coverage/ 无限增长。
+# 仅保留最近 N 份历史报告（Session 目录，目录名即报告 ID），避免 coverage/ 无限增长。
 # 单次运行会为每个测试类建 1 个 Session，长期累积可达数百 MB；可用 COVERAGE_KEEP_SESSIONS 调整。
+# 新旧按目录名中的时间戳（yyyyMMdd-HHmmss-xxxxx）倒序判定，比目录 mtime 稳定（拷贝/同步不会打乱顺序）；
+# 本轮并集报告（merged_session）无论排位如何都保留，避免刚跑出的报告被自己清掉。
 prune_sessions() {
     local keep="${COVERAGE_KEEP_SESSIONS:-10}"
     if ! [[ "${keep}" =~ ^[0-9]+$ ]]; then
-        warn "COVERAGE_KEEP_SESSIONS 非数字（${keep}），跳过历史 Session 清理"
+        warn "COVERAGE_KEEP_SESSIONS 非数字（${keep}），跳过历史报告清理"
         return 0
     fi
-    local dirs=() dir
-    while IFS= read -r dir; do
-        [[ -n "${dir}" ]] && dirs+=("${dir}")
-    done < <(ls -dt "${SESSIONS_DIR}"/*/ 2>/dev/null)
-    local total="${#dirs[@]}"
-    if (( total <= keep )); then
-        return 0
-    fi
-    local removed=0
-    for (( index = keep; index < total; index++ )); do
-        dir="${dirs[${index}]%/}"
-        if rm -rf "${dir}"; then
-            removed=$((removed + 1))
-        fi
+
+    # 只认约定形态的 Session 目录，其余文件/目录一律不动
+    local names=() entry name
+    for entry in "${SESSIONS_DIR}"/*/; do
+        name="${entry%/}"
+        name="${name##*/}"
+        [[ "${name}" =~ ^[0-9]{8}-[0-9]{6}- ]] && names+=("${name}")
     done
-    info "清理历史 Session：删除 ${removed} 个，保留最近 ${keep} 个（COVERAGE_KEEP_SESSIONS 可调整）"
+    (( ${#names[@]} > keep )) || return 0
+
+    local sorted removed=0 kept=0
+    sorted="$(printf '%s\n' "${names[@]}" | sort -r)"
+    while IFS= read -r name; do
+        [[ -n "${name}" ]] || continue
+        if (( kept < keep )) || [[ "${name}" == "${merged_session:-}" ]]; then
+            (( kept++ )) || true
+            continue
+        fi
+        if rm -rf "${SESSIONS_DIR:?}/${name}"; then
+            (( removed++ )) || true
+        fi
+    done <<< "${sorted}"
+
+    if (( removed > 0 )); then
+        info "清理历史报告：删除 ${removed} 份，保留 ${kept} 份（COVERAGE_KEEP_SESSIONS 可调整）"
+    fi
+    return 0
 }
 
 latest_session_dir() {
