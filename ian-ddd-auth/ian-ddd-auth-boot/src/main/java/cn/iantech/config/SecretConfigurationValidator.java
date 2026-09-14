@@ -55,7 +55,13 @@ public class SecretConfigurationValidator {
         }
     }
 
+    /**
+     * 仅当所有激活 Profile 都属于本地 Profile 时才放行。
+     * 只要出现任一非本地 Profile（例如 prod，或 prod 与 dev 并存），就必须走严格校验，
+     * 避免通过叠加一个本地 Profile 绕过生产密钥检查。
+     */
     private boolean isLocalEnvironment() {
-        return Arrays.stream(environment.getActiveProfiles()).anyMatch(LOCAL_PROFILES::contains);
+        String[] activeProfiles = environment.getActiveProfiles();
+        return activeProfiles.length > 0 && Arrays.stream(activeProfiles).allMatch(LOCAL_PROFILES::contains);
     }
 }
