@@ -331,6 +331,7 @@ preflight() {
     # 报告依赖各服务的 classes 目录，缺失会导致覆盖率静默为 0
     local missing=()
     for dir in \
+        "${GATEWAY_DIR}/gateway-core/target/classes" \
         "${GATEWAY_DIR}/gateway-app/target/classes" \
         "${AUTH_DIR}/ian-ddd-auth-trigger/target/classes" \
         "${AUTH_DIR}/ian-ddd-auth-domain/target/classes" \
@@ -542,7 +543,9 @@ run_tests() {
     # 每个测试类各自建立 Session（beforeAll 建、afterAll 汇总），互不干扰。
     # 注意：登录接口有 IP 风控（同一 IP 60 秒内 30 次尝试），连续重跑需间隔 60 秒以上，
     # 否则会命中 429 AUTH_RATE_LIMITED 导致用例失败。
-    (cd "${GATEWAY_DIR}" && RUN_COVERAGE_E2E=true mvn -pl gateway-app test -o \
+    # COVERAGE_FAIL_ON_ERROR=true：流水线里控制器不可用 / Agent 不可达必须让用例失败，
+    # 否则采集整体落空时仍会「测试全绿 + 并集覆盖率静默为 0」。本地手工调试可自行覆盖该开关。
+    (cd "${GATEWAY_DIR}" && RUN_COVERAGE_E2E=true COVERAGE_FAIL_ON_ERROR=true mvn -pl gateway-app test -o \
         -Dtest='GatewayCoverageE2eTest,*E2eTest' \
         -Dcoverage.e2e.login-name="${LOGIN_NAME}" \
         -Dcoverage.e2e.login-password="${LOGIN_PASSWORD}" \

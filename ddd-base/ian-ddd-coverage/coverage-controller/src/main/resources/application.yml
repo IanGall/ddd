@@ -27,8 +27,12 @@ coverage:
   reports:
     - name: gateway
       classes-directories:
+        # gateway-core 承载认证过滤器/渠道验签/异常翻译等安全关键类，与 gateway-app 同 JVM 采集，
+        # 必须一并纳入并集报告，否则并集口径失真、40% 目标被高估。
+        - ian-ddd-gateway/gateway-core/target/classes
         - ian-ddd-gateway/gateway-app/target/classes
       source-directories:
+        - ian-ddd-gateway/gateway-core/src/main/java
         - ian-ddd-gateway/gateway-app/src/main/java
     - name: auth
       classes-directories:
