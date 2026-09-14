@@ -15,11 +15,10 @@ import java.time.Duration;
 import java.util.Locale;
 
 import static cn.iantech.common.constant.Constants.ResponseCode.AUTH_RATE_LIMITED;
-import static cn.iantech.common.constant.Constants.ResponseCode.AUTH_REQUIRED;
 import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 /**
- * C 端用户注册与凭据校验用例。
+ * C 端用户注册用例。
  */
 @Service
 @RequiredArgsConstructor
@@ -68,16 +67,6 @@ public class CustomerCaseService {
                 .passwordHash(passwordEncoder.encode(command.password()))
                 .displayName(command.displayName() == null ? "" : command.displayName())
                 .status(true).deleted(false).build());
-    }
-
-    public CustomerUserEntity authenticate(String loginName, String password) {
-        CustomerUserEntity user = repository.findByLoginName(normalizeLoginName(loginName))
-                .orElseThrow(() -> new AppException(AUTH_REQUIRED.getCode(), "账号或密码错误"));
-        if (!Boolean.TRUE.equals(user.getStatus()) || Boolean.TRUE.equals(user.getDeleted())
-                || password == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new AppException(AUTH_REQUIRED.getCode(), "账号或密码错误");
-        }
-        return user;
     }
 
     /**

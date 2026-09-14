@@ -13,6 +13,4 @@ public interface ICustomerService {
      * 传递的可信字段（由网关填充，见 {@link CustomerRegisterReq#getIpAddress()}）。</p>
      */
     CustomerUserDTO register(CustomerRegisterReq request) throws AppException;
-
-    CustomerUserDTO authenticate(String loginName, String password) throws AppException;
 }

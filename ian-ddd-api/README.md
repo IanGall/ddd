@@ -9,7 +9,7 @@ ian-ddd-api/                          # 聚合 POM（packaging=pom）
 │       └── cn.iantech.api
 │           ├── IAuthService              # 登录 / 刷新 / 校验 / 注销 / 会话
 │           ├── IRbacService              # RBAC 用户 / 角色 / 权限 / 关系
-│           ├── ICustomerService          # C 端用户注册与认证
+│           ├── ICustomerService          # C 端用户注册（C 端认证走 IAuthService.customerLogin）
 │           ├── IChannelCredentialService # 渠道凭证管理
 │           ├── IPlatformAccountService   # 平台开户（X-Platform-Token）
 │           └── model.{auth,rbac,channel,customer}   # 请求/响应 DTO

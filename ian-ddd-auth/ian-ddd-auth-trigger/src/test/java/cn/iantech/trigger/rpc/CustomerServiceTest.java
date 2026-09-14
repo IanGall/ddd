@@ -66,14 +66,4 @@ class CustomerServiceTest {
         assertEquals(9001L, dto.getId());
         verify(customerCaseService).register(isNull());
     }
-
-    @Test
-    void shouldDelegateAuthenticateWithOriginalArguments() {
-        when(customerCaseService.authenticate("13800000000", "pwd-1234")).thenReturn(ENTITY);
-
-        CustomerUserDTO dto = service.authenticate("13800000000", "pwd-1234");
-
-        assertEquals(9001L, dto.getId());
-        verify(customerCaseService).authenticate("13800000000", "pwd-1234");
-    }
 }

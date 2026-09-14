@@ -19,9 +19,4 @@ public class CustomerService implements ICustomerService {
     public CustomerUserDTO register(CustomerRegisterReq request) {
         return CustomerApiConverter.toDTO(customerCaseService.register(commandConvertor.toCommand(request)));
     }
-
-    @Override
-    public CustomerUserDTO authenticate(String loginName, String password) {
-        return CustomerApiConverter.toDTO(customerCaseService.authenticate(loginName, password));
-    }
 }
