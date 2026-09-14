@@ -42,6 +42,9 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
     private static final String APP_PREFIX = "/api/app";
     private static final String EXTERNAL_PREFIX = "/api/external";
 
+    /** API 根路径：用于区分「像一次 API 调用但分区写错」与「访问了不存在的资源」。 */
+    private static final String API_ROOT = "/api";
+
     /** 三类业务路径前缀；未匹配任何前缀的请求一律拒绝（默认拒绝）。 */
     public static final List<String> ROUTE_PREFIXES = List.of(ADMIN_PREFIX, APP_PREFIX, EXTERNAL_PREFIX);
 
@@ -95,6 +98,8 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
                 case EXTERNAL -> authenticateExternal(request, response, filterChain, requestId);
                 case DENIED -> resolveException(request, response,
                         new AppException(Constants.ResponseCode.ACCESS_DENIED.getCode(), "请求路径不在允许的 API 分区内"));
+                case MISSING -> resolveException(request, response,
+                        new AppException(Constants.ResponseCode.NOT_FOUND.getCode(), "请求路径不存在"));
             }
         } finally {
             MDC.remove(ContextKeys.TRACE_ID);
@@ -205,7 +210,13 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         if (matches(path, EXTERNAL_PREFIX)) {
             return RouteKind.EXTERNAL;
         }
-        return RouteKind.DENIED;
+        // 不属于任何分区的路径分两种语义：
+        //   /api/** → 像是分区写错或越界访问，按无权访问（不披露路径是否存在）；
+        //   其余   → 访问了不存在的资源（favicon、静态资源、旧路径），按 404，
+        //            避免把正常的「找不到」计入鉴权失败指标、误导调用方判断。
+        // 注意：危险形态（百分号编码、反斜杠、分号、重复斜杠、. / .. 片段）在 safePath 已返回 null，
+        // 一律走 DENIED，不会被判成 404。
+        return matches(path, API_ROOT) ? RouteKind.DENIED : RouteKind.MISSING;
     }
 
     private boolean matchesAny(List<Route> routes, String method, String path) {
@@ -302,7 +313,10 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         APP,
         EXTERNAL,
         ACTUATOR,
-        DENIED
+        /** 不属于任何分区、但形态像 API 调用（{@code /api/**}）或形态非法：无权访问。 */
+        DENIED,
+        /** 不属于任何分区、且不像 API 调用的普通路径：资源不存在。 */
+        MISSING
     }
 
     /**

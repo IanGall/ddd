@@ -104,13 +104,12 @@ class GatewayAuthFilterTest {
     }
 
     @Test
-    void shouldRejectLegacyUnknownAndUnsafePathsByDefault() throws Exception {
+    void shouldDenyApiPathsOutsideDeclaredPartitions() throws Exception {
         GatewayAuthClient authClient = mock(GatewayAuthClient.class);
         HandlerExceptionResolver resolver = resolver();
         GatewayAuthFilter filter = new GatewayAuthFilter(authClient, resolver);
 
-        String[] deniedPaths = {"/auth/login", "/customer/register", "/platform/accounts",
-                "/api/rbac/roles", "/api/mobile/orders", "/api/integration/orders", "/api/unknown",
+        String[] deniedPaths = {"/api/rbac/roles", "/api/mobile/orders", "/api/integration/orders", "/api/unknown",
                 "/api/adminx", "/api/application", "/api/external-test", "/api/admin//roles",
                 "/api/admin/roles;version=1", "/api/admin/./roles", "/api/admin/../app",
                 "/api/admin%2froles", "/api/admin\\roles", "/api/app/%2e%2e/admin"};
@@ -122,6 +121,26 @@ class GatewayAuthFilterTest {
         verify(resolver, times(deniedPaths.length)).resolveException(any(), any(), isNull(),
                 argThat(exception -> exception instanceof AppException appException
                         && "ACCESS_DENIED".equals(appException.getCode())));
+        verifyNoInteractions(authClient);
+    }
+
+    @Test
+    void shouldReportNotFoundForNonApiPathsInsteadOfForbidden() throws Exception {
+        GatewayAuthClient authClient = mock(GatewayAuthClient.class);
+        HandlerExceptionResolver resolver = resolver();
+        GatewayAuthFilter filter = new GatewayAuthFilter(authClient, resolver);
+
+        // 形态合法但既不属于任何分区、也不像 API 调用：按资源不存在上报，
+        // 避免把 favicon 这类正常 404、以及已下线的旧路径计入鉴权失败。
+        String[] missingPaths = {"/auth/login", "/customer/register", "/platform/accounts", "/favicon.ico"};
+        for (String path : missingPaths) {
+            FilterChain chain = mock(FilterChain.class);
+            filter.doFilter(new MockHttpServletRequest("GET", path), new MockHttpServletResponse(), chain);
+            verifyNoInteractions(chain);
+        }
+        verify(resolver, times(missingPaths.length)).resolveException(any(), any(), isNull(),
+                argThat(exception -> exception instanceof AppException appException
+                        && "NOT_FOUND".equals(appException.getCode())));
         verifyNoInteractions(authClient);
     }
 
