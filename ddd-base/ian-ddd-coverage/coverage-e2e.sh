@@ -426,6 +426,30 @@ start_gateway() {
     nohup bash "${GATEWAY_DIR}/dev-ops/start-with-coverage.sh" > "${LOG_DIR}/gateway.log" 2>&1 &
     wait_for_service "${GATEWAY_PORT}" "http://127.0.0.1:${GATEWAY_PORT}/actuator/health" 120 \
         || fail "Gateway 启动失败，日志：${LOG_DIR}/gateway.log"
+    warn_on_foreign_providers
+}
+
+# 本机网关只应发现本机这一份认证服务实例。
+#
+# 若注册中心里还有其它同名实例（典型：本机 k8s 集群跑着同一套服务且未隔离命名空间），
+# Dubbo 会把认证 RPC 按随机负载均衡分给它们：那些实例连的是**另一套库**，于是在一边开户/注册的账号
+# 落到另一边就查不到，表现为随机的「账号或密码错误」；同时本机覆盖率静默漏采（报告里 auth 覆盖率异常偏低）。
+# 这里只在启动日志里扫一次，命中就提示，不直接失败（避免环境差异导致流水线假红）。
+warn_on_foreign_providers() {
+    local waited=0 sizes max_size
+    while (( waited < 10 )); do
+        grep -q "Refreshed invoker size" "${LOG_DIR}/gateway.log" 2>/dev/null && break
+        sleep 1
+        (( waited++ )) || true
+    done
+    sizes="$(grep -o "Refreshed invoker size [0-9]*" "${LOG_DIR}/gateway.log" 2>/dev/null | awk '{print $4}' || true)"
+    [[ -n "${sizes}" ]] || return 0
+    max_size="$(printf '%s\n' "${sizes}" | sort -n | tail -1)"
+    (( max_size > 1 )) || return 0
+    warn "注册中心里存在 ${max_size} 份同名服务实例，认证 RPC 会被负载均衡到不属于本流水线的实例上"
+    warn "  常见原因：本机 k8s 集群部署了同一套服务且与本流水线共用了 Nacos 命名空间"
+    warn "  影响：随机的「账号或密码错误」，以及覆盖率静默漏采"
+    warn "  处理：集群侧用 scripts/deploy-local.sh 部署（默认注册到 dev-test 命名空间），详见 README 的前置条件"
 }
 
 # 追加服务：用各自项目内的 start-with-coverage.sh 启动

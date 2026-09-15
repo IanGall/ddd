@@ -24,9 +24,16 @@
 #
 # 可覆盖的环境变量（默认按本机集群的 infra 命名空间）：
 #   MYSQL_HOST MYSQL_PORT MYSQL_DATABASE_00 MYSQL_DATABASE_01 MYSQL_DATABASE_RBAC
-#   REDIS_HOST REDIS_PORT NACOS_HOST KAFKA_BOOTSTRAP_SERVERS KAFKA_ENABLED
+#   REDIS_HOST REDIS_PORT NACOS_HOST DUBBO_REGISTRY_NAMESPACE KAFKA_BOOTSTRAP_SERVERS KAFKA_ENABLED
 #   DDD_ID_GENERATOR_NAMESPACE CHANNEL_ENCRYPTION_MASTER_KEY PLATFORM_ADMIN_TOKEN IMAGE_PREFIX
 #   中间件口令默认读仓库根 .env.local；显式传入的同名环境变量优先。
+#
+# DUBBO_REGISTRY_NAMESPACE（默认 dev-test，设空值回到 public）：集群部署注册到独立的 Nacos 命名空间。
+#   Nacos 的命名空间是注册中心的隔离边界，与 k8s 的 namespace 无关。本机覆盖率流水线
+#   （ddd-base/ian-ddd-coverage/coverage-e2e.sh）跑在 public 命名空间，且用的是**测试库**
+#   （autotest profile → ddd_rbac_test / ian_test_tech_db_*），而本脚本部署的集群用**开发库**。
+#   两者若同处 public，本机网关会把认证 RPC 按随机负载均衡分给两边的实例：在一边注册/开户的账号
+#   落到另一边就查不到，表现为随机的「账号或密码错误」，同时本机覆盖率静默漏采（请求根本没打到本机）。
 #
 # 依赖：docker（含 buildx）、kubectl、JDK 21 + Maven（仅 deploy 且未 --skip-build 时需要）、.env.local。
 # 适用范围：本机/联调集群（直接用本地 Docker 里构建的镜像，不推仓库）。
@@ -270,6 +277,8 @@ load_config() {
   resolve REDIS_HOST "redis.infra.svc.cluster.local"
   resolve REDIS_PORT "6379"
   resolve NACOS_HOST "nacos.infra.svc.cluster.local"
+  # 独立命名空间，避免与本机覆盖率流水线的实例互相发现（原因见文件头）
+  resolve DUBBO_REGISTRY_NAMESPACE "dev-test"
   resolve KAFKA_BOOTSTRAP_SERVERS "kafka.infra.svc.cluster.local:9092"
   # 本地 infra 的 Kafka 通告地址是 kafka:9092，跨命名空间解析不了；默认关掉降噪
   resolve KAFKA_ENABLED "false"
@@ -303,6 +312,16 @@ sha256() {
 }
 image_id() { docker image inspect "$1" --format '{{.Id}}' 2>/dev/null || echo missing; }
 
+# 注册中心地址：Dubbo 的 Nacos 注册中心把 namespace 当 URL 参数解析，它同时作用于服务发现与元数据
+# （两个服务的 dubbo.registry.use-as-metadata-center 都是 true），因此只改这一处即可整链路隔离。
+registry_address() {
+  if [ -n "${DUBBO_REGISTRY_NAMESPACE}" ]; then
+    echo "nacos://${NACOS_HOST}:8848?namespace=${DUBBO_REGISTRY_NAMESPACE}"
+  else
+    echo "nacos://${NACOS_HOST}:8848"
+  fi
+}
+
 build_jars() {
   [ "${SKIP_BUILD}" = "yes" ] && return
   log "构建 $2 的 jar：mvn -pl $1 -am package -DskipTests"
@@ -331,7 +350,7 @@ write_config() {
       fi
       echo "DUBBO_QOS_ENABLED=false"
       echo "DUBBO_PROTOCOL_PORT=20880"
-      echo "DUBBO_REGISTRY_ADDRESS=nacos://${NACOS_HOST}:8848"
+      echo "DUBBO_REGISTRY_ADDRESS=$(registry_address)"
       echo "DUBBO_REGISTRY_USERNAME=nacos"
       echo "REDIS_HOST=${REDIS_HOST}"
       echo "REDIS_PORT=${REDIS_PORT}"
@@ -358,7 +377,7 @@ write_config() {
   else
     {
       echo "SPRING_PROFILES_ACTIVE=${PROFILE}"
-      echo "DUBBO_REGISTRY_ADDRESS=nacos://${NACOS_HOST}:8848"
+      echo "DUBBO_REGISTRY_ADDRESS=$(registry_address)"
       echo "DUBBO_REGISTRY_USERNAME=nacos"
     } >"${cm}"
     echo "DUBBO_REGISTRY_PASSWORD=${DUBBO_REGISTRY_PASSWORD}" >"${secret}"

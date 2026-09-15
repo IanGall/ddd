@@ -146,11 +146,32 @@ ddd-base/ian-ddd-coverage/coverage-e2e.sh --keep
 | `coverage-e2e.sh status` | 查看路径、服务状态与最近会话         |
 | `coverage-e2e.sh stop`   | 停止全部服务                         |
 
-可用环境变量：`COVERAGE_E2E_LOGIN_NAME` / `COVERAGE_E2E_LOGIN_PASSWORD`（不填则自动开户并缓存凭证）、
+可用环境变量：`COVERAGE_E2E_LOGIN_NAME` / `COVERAGE_E2E_LOGIN_PASSWORD`（不填则自动开户并缓存凭证；**填了就必须是平台
+开户接口创建的测试库 `ddd_rbac_test` 账号**——开户会初始化 `rbac:*` 系统权限目录，`AdminRbacE2eTest` 依赖其中的
+`rbac:user:read`；SQL 种子账号 `test-admin@1.com` 没有权限行，会以「未找到系统权限」失败，开发库的 `admin@1.com` 在测试库里也不存在）、
 `COVERAGE_SKIP_BUILD=1`（跳过构建快速重跑）、`WORKSPACE_DIR`（覆盖工作区根目录探测）、
 `COVERAGE_SPRING_PROFILES`（默认 `dev,autotest`，见下）。
 
+固定账号时这样开户（先按本文档起一次服务，或让 `scripts/deploy-local.sh` 起一份集群）：
+
+```bash
+curl -X POST http://127.0.0.1:8092/api/admin/platform/accounts \
+  -H 'Content-Type: application/json' -H "X-Platform-Token: $COVERAGE_PLATFORM_TOKEN" \
+  -d '{"username":"e2e_admin","password":"<8~72 字节的口令>","displayName":"E2E 覆盖率账号"}'
+# 用响应里的 loginName（形如 e2e_admin@<accountId>.com）填 COVERAGE_E2E_LOGIN_NAME
+```
+
 前置条件：Nacos (8848)、Redis (6379)、MySQL (3306) 已启动，且**自动化测试库已建好**（脚本不做建库）。
+
+> **注册中心必须与本机 k8s 部署隔离**。覆盖流水线的两个服务注册在 Nacos 默认命名空间（public），
+> 而 `scripts/deploy-local.sh` 部署到集群的同名服务注册在 `dev-test` 命名空间——两边用的是**不同的库**
+> （测试库 vs 开发库）。两者若同处一个命名空间，本机网关会把认证 RPC 随机分给两边的实例：在一边注册/开户的
+> 账号落到另一边就查不到，表现为随机的 `AUTH_REQUIRED 账号或密码错误`，同时本机覆盖率静默漏采（请求根本没打到本机，
+> 报告里表现为 auth 覆盖率异常偏低）。
+>
+> 因此部署集群**请用 `scripts/deploy-local.sh`**（默认 `DUBBO_REGISTRY_NAMESPACE=dev-test`），不要手工
+> `kubectl apply -f <清单目录>`：手工 apply 会用仓库里那份 prod 模板覆盖脚本生成的 ConfigMap，把集群实例塞回 public。
+> 排查：在本流水线所用的命名空间里查应用级服务名 `ian-ddd-auth` 的实例列表，应当只有本机这一个；两个 IP 同时出现即命中。
 
 服务以 `dev,autotest` 两个 Spring profile 启动（后者优先）：业务配置沿用 dev，但 MySQL/Redis 全部指向
 自动化测试库，dev 库不会被 E2E 写入。对照关系与建库清单见 `application-autotest.yml`：
