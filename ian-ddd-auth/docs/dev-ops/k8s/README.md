@@ -9,7 +9,7 @@
 | `service.yaml` | ClusterIP，仅 20880（运维入口，非 Dubbo 数据面） |
 | `configmap.yaml` | 非敏感配置（键名与 `application-prod.yml` / `sharding-jdbc-prod.yaml` 的 `${...}` 一一对应） |
 | `secret.yaml.example` | 敏感配置**键名样例**，不含真实值 |
-| `hpa.yaml` | CPU 70%，2 → 8 |
+| `hpa.yaml` | CPU 70%，2 → 8（本地用 `scripts/deploy-local.sh` 部署时默认收敛到 1 副本，`--replicas keep` 才按清单） |
 | `pdb.yaml` | `minAvailable: 1` |
 
 **日常更新不需要按下面章节手工敲**：仓库根的一键脚本会做完这一整套（构建 jar → 构建镜像 → 刷新 ConfigMap/Secret → apply
@@ -31,7 +31,7 @@ bash scripts/deploy-local.sh clean --service auth  # 清理本服务的资源
 bash ian-ddd-auth/ian-ddd-auth-boot/build.sh        # 自动跟随本机架构 → system/ian-ddd-auth-boot:1.0-SNAPSHOT
 ```
 
-镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
+镜像基于 `eclipse-temurin:21-jre`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
 架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**。`build.sh` 会读 Docker 服务端架构自动决定构建哪个架构（`arm64` 机器出
 `linux/arm64`、`amd64` 机器出 `linux/amd64`，守护进程不可达时退回 `uname`）：
 
@@ -45,11 +45,6 @@ IMAGE=<可推送的仓库>/ian-ddd-auth-boot PLATFORMS=linux/amd64,linux/arm64 \
 ```
 
 混架构集群（既有 arm64 又有 amd64 节点）必须用最后一种推多架构镜像；单架构环境用默认的自动识别即可。
-
-注意 alpine 与 Ubuntu 基础镜像的三处差异：`apt-get` 要换成 `apk`；**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
-`/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）；alpine 用的是 **musl libc**，其 DNS 解析器在「响应超过 512 字节 /
-搜索域很多」时比 glibc 脆弱，而 k8s 的 `ndots:5` + 多搜索域正是这种场景——本仓库的服务都按 FQDN
-（`xxx.infra.svc.cluster.local`）访问中间件，实测正常，但若将来出现解析抖动，这是第一个要查的点。
 
 镜像内已固定 `SPRING_PROFILES_ACTIVE=prod` 与 `TZ=Asia/Shanghai`，因此 `application-prod.yml` 要求的所有中间件地址与凭证**必须**由
 ConfigMap / Secret 注入；缺任何一项都会以配置错误启动失败（刻意不给可用默认值）。

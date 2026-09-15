@@ -183,15 +183,50 @@ E2E 并集行覆盖率目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可
 **一键脚本**（构建 jar → 构建镜像 → 刷新 ConfigMap/Secret → apply 清单 → 按需滚动 → 等就绪，可重复执行）：
 
 ```bash
-bash scripts/deploy-local.sh                    # 默认：两个服务、dev profile、命名空间 ian-ddd
+bash scripts/deploy-local.sh                    # 默认：两个服务、dev profile、命名空间 ian-ddd、每服务 1 副本
 bash scripts/deploy-local.sh --service auth     # 只更新认证服务（--service gateway 只更新网关）
+bash scripts/deploy-local.sh --replicas keep    # 副本数按清单（HPA 2→8/2→6），需要验证 HPA 伸缩时用
 bash scripts/deploy-local.sh status|logs|restart # 查看状态 / 看日志（--follow）/ 强制滚动重启
 bash scripts/deploy-local.sh clean              # 清理工作负载与配置（--purge 连命名空间，--images 连本地镜像）
 ```
 
-脚本要点：自动识别本机架构出镜像（`--profile prod` 时要求自备强密钥，本地开发值会被启动期校验拒绝）；给 Deployment 打
-「镜像 + 配置」摘要注解，内容没变就不重启 Pod；配置只由脚本管理（手工 `kubectl apply -f <目录>` 会覆盖按 profile 生成的
-ConfigMap）。下面是不用脚本时的手工步骤与清单说明。
+脚本要点：自动识别本机架构出镜像（`--profile prod` 时要求自备强密钥，本地开发值会被启动期校验拒绝）；**本地副本默认收敛到 1**
+（同时把 HPA 的 `minReplicas` 同步为 1，否则 HPA 15 秒后就把手动 scale 改回清单里的 2；`--replicas N` 可指定其它值）；
+给 Deployment 打「镜像 + 配置」摘要注解，内容没变就不重启 Pod；配置只由脚本管理（手工 `kubectl apply -f <目录>` 会覆盖按
+profile 生成的 ConfigMap）。下面是不用脚本时的手工步骤与清单说明。
+
+### 服务怎么访问
+
+| 访问方 | 目标 | 地址 | 说明 |
+| --- | --- | --- | --- |
+| 宿主机 | 网关（唯一入口） | `http://127.0.0.1` + `Host: gateway.example.com` | OrbStack 把 `infra/apisix-gateway` 这个 LoadBalancer 的端口映射到宿主 `127.0.0.1`，Ingress 按 Host 转发到 `ian-ddd-gateway:8092` |
+| 宿主机 | 网关（备用入口） | `http://127.0.0.1:31213` | 同一个 LoadBalancer 的 nodePort，不依赖宿主端口映射 |
+| 宿主机 | 网关（不依赖 apisix） | `kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092` → `http://127.0.0.1:8092` | 换集群或 CI 里用 |
+| 集群内 | 网关 | `http://ian-ddd-gateway.ian-ddd.svc.cluster.local:8092` | 绕过 Ingress，直接打 Service |
+| 集群内 | 认证服务 | `ian-ddd-auth.ian-ddd.svc.cluster.local:20880`（Dubbo） | **只有 Dubbo，没有 HTTP**；正常路径是网关以 Dubbo 调用它 |
+| 宿主机 | 认证服务（调试） | `kubectl port-forward -n ian-ddd svc/ian-ddd-auth 20880:20880` + Dubbo 直连 | provider 注册的是 podIP，本地直连要用直连模式 |
+| 宿主机 | infra 中间件 | `127.0.0.1:3306`（MySQL）、`:6379`（Redis）、`:8848`/`:9848`（Nacos）、`:9092`（Kafka） | 同一套端口映射 |
+| 集群内 | infra 中间件 | `<svc>.infra.svc.cluster.local` | 清单里的 `DUBBO_REGISTRY_ADDRESS` / `MYSQL_HOST` 等就是这些地址 |
+
+```bash
+# 网关健康检查 + 一次业务调用（宿主机的两条入口都试一遍）
+curl -H 'Host: gateway.example.com' http://127.0.0.1/actuator/health
+curl -H 'Host: gateway.example.com' http://127.0.0.1:31213/actuator/health
+curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
+  -X POST -d '{"loginName":"nobody@1.com","password":"wrong-password"}' \
+  http://127.0.0.1/api/admin/auth/login        # 期望 401 AUTH_REQUIRED（业务错误码 = 全链路通）
+```
+
+四条要点：
+
+- **认证服务没有可直连的 HTTP 入口**：它只暴露 Dubbo 20880（`server.port: 8091` 从不被监听），对外只有"经网关"这一条路；
+  要用 HTTP 调它自己得先给 trigger 打开 `-Phttp`。
+- **Ingress 的 host 是占位值** `gateway.example.com`：要用真实域名就往 `/etc/hosts` 加 `127.0.0.1 gateway.example.com`，
+  或 `curl --resolve gateway.example.com:80:127.0.0.1`。
+- **别用 `192.168.139.2`**（LoadBalancer 的 EXTERNAL-IP）——它在宿主机不可达。
+- **健康检查的边界**：网关 `/actuator/health` UP 只代表网关自身；认证服务 TCP 20880 通也不代表依赖就绪（MySQL 挂掉时它仍是
+  `Ready`，业务请求会返回 504 `RPC_TIMEOUT`）。容器内自检：网关镜像有 `curl`，认证镜像只有 `bash`/`nc`
+  （`nc -z -w 3 127.0.0.1 20880`，或用 `bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/20880'`）。
 
 两个可部署服务各自在模块内维护 k8s 清单（原生 YAML，`kubectl apply -f` 直接使用，不需要 Helm/Kustomize），权威说明在各自的
 `k8s/README.md`：

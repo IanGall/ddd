@@ -9,7 +9,7 @@
 | `service.yaml` | ClusterIP，`http 8092` |
 | `configmap.yaml` | 非敏感配置（注册中心地址与用户名） |
 | `secret.yaml.example` | 敏感配置**键名样例**，不含真实值 |
-| `hpa.yaml` | CPU 70%，2 → 6 |
+| `hpa.yaml` | CPU 70%，2 → 6（本地用 `scripts/deploy-local.sh` 部署时默认收敛到 1 副本，`--replicas keep` 才按清单） |
 | `pdb.yaml` | `minAvailable: 1` |
 | `ingress.yaml` | 唯一对外入口，全量路径透传给网关 |
 
@@ -32,7 +32,7 @@ bash scripts/deploy-local.sh clean --service gateway  # 清理本服务的资源
 bash ian-ddd-gateway/gateway-app/build.sh      # 自动跟随本机架构 → system/ian-ddd-gateway:1.0-SNAPSHOT
 ```
 
-镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
+镜像基于 `eclipse-temurin:21-jre`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
 架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**。`build.sh` 会读 Docker 服务端架构自动决定构建哪个架构：
 
 ```bash
@@ -45,8 +45,6 @@ IMAGE=<可推送的仓库>/ian-ddd-gateway PLATFORMS=linux/amd64,linux/arm64 \
 ```
 
 混架构集群必须用最后一种推多架构镜像；单架构环境用默认的自动识别即可。
-注意 alpine 与 Ubuntu 基础镜像的两处差异：`apt-get` 要换成 `apk`，且**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
-`/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）。
 
 镜像内已固定 `SPRING_PROFILES_ACTIVE=prod` 与 `TZ=Asia/Shanghai`；`application-prod.yml` 要求的注册中心地址与凭证必须由
 ConfigMap / Secret 注入。

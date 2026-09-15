@@ -14,6 +14,8 @@
 #   --service all|auth|gateway   默认 all；clean 时只清单个服务的资源（命名空间与另一个服务保留）
 #   --profile dev|prod           默认 dev；prod 需要自备强密钥（见下）
 #   --namespace NAME             默认 ian-ddd
+#   --replicas N|keep            本地副本数，默认 1（两个服务各 1 个 Pod，HPA minReplicas 同步收到 N）；
+#                                keep = 完全按清单（HPA 2→8/2→6），需要验证 HPA 伸缩时用它
 #   --skip-build                 deploy 时跳过 Maven 与镜像构建，只刷配置并滚动
 #   --follow                     logs 时持续跟随（跟随最新的那个 Pod）
 #
@@ -39,6 +41,7 @@ SERVICE="all"
 PROFILE="dev"
 NAMESPACE="ian-ddd"
 SKIP_BUILD="no"
+REPLICAS="1"
 PURGE="no"
 WITH_IMAGES="no"
 FOLLOW="no"
@@ -75,6 +78,10 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --skip-build) SKIP_BUILD="yes" ;;
+    --replicas)
+      REPLICAS="${2:?--replicas 需要取值：1|2|... 或 keep}"
+      shift
+      ;;
     --purge) PURGE="yes" ;;
     --images) WITH_IMAGES="yes" ;;
     --follow | -f) FOLLOW="yes" ;;
@@ -90,6 +97,10 @@ done
 case "${ACTION}" in deploy | status | logs | restart | clean) ;; *) die "未知动作：${ACTION}（支持 deploy|status|logs|restart|clean）" ;; esac
 case "${SERVICE}" in all | auth | gateway) ;; *) die "--service 只支持 all|auth|gateway" ;; esac
 case "${PROFILE}" in dev | prod) ;; *) die "--profile 只支持 dev|prod" ;; esac
+case "${REPLICAS}" in
+  keep) ;;
+  '' | *[!0-9]*) die "--replicas 只支持 keep 或非负整数（当前：${REPLICAS}）" ;;
+esac
 [ -n "${NAMESPACE}" ] || die "命名空间不能为空"
 case "${NAMESPACE}" in default | kube-system | kube-public | kube-node-lease) die "拒绝操作系统命名空间 ${NAMESPACE}" ;; esac
 command -v kubectl >/dev/null || die "找不到 kubectl"
@@ -382,6 +393,20 @@ apply_manifests() {
   log "已应用清单：${dir}"
 }
 
+# 本地副本数：默认收到 1 个，避免在开发机上白占内存；同时把 HPA 的 minReplicas 一起改，
+# 否则 HPA 会在下一轮（默认 15s）把手动 scale 改回清单里的 2。
+tune_replicas() {
+  local svc="$1" prefix
+  [ "${REPLICAS}" = "keep" ] && return
+  prefix="$(service_prefix "${svc}")"
+  if kubectl get hpa "${prefix}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    kubectl patch hpa "${prefix}" -n "${NAMESPACE}" --type=merge \
+      -p "{\"spec\":{\"minReplicas\":${REPLICAS}}}" >/dev/null
+  fi
+  kubectl scale "deploy/${prefix}" -n "${NAMESPACE}" --replicas="${REPLICAS}" >/dev/null
+  log "${prefix}：副本数设为 ${REPLICAS}（HPA minReplicas 同步；要按清单 2→8 用 --replicas keep）"
+}
+
 # 内容没变就不滚动：把「镜像 ID + 配置摘要」打成 Pod 模板注解，变了才触发滚动更新
 rollout_if_changed() {
   local svc="$1" prefix image current live hash
@@ -408,6 +433,7 @@ deploy_service() {
   build_image "${module}"
   apply_config "${svc}" "$(service_prefix "${svc}")"
   apply_manifests "${svc}"
+  tune_replicas "${svc}"
   rollout_if_changed "${svc}"
   kubectl rollout status "deploy/$(service_prefix "${svc}")" -n "${NAMESPACE}" --timeout=240s
 }
@@ -425,6 +451,9 @@ do_deploy() {
     printf '  curl -H "Host: gateway.example.com" http://127.0.0.1/actuator/health\n'
   fi
   warn "配置只由本脚本管理：手工 kubectl apply -f <目录> 会覆盖按 profile 生成的 ConfigMap，并绕开摘要检查"
+  if [ "${REPLICAS}" != "keep" ]; then
+    warn "本地副本数已收到 ${REPLICAS}（HPA minReplicas=${REPLICAS}）；要验证 HPA 伸缩请用 --replicas keep"
+  fi
 }
 
 case "${ACTION}" in
