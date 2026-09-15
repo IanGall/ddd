@@ -136,4 +136,16 @@ class RbacServiceTest {
                 QueryUserRoleIdsReq.builder().userId(3003L).build());
         assertEquals(3003L, withId.getUserId());
     }
+
+    @Test
+    void shouldResolveActorAndDelegateWhenQueryingOwnPermissionCodes() {
+        when(actorResolver.resolve()).thenReturn(ACTOR);
+        when(rbacCaseService.queryOwnPermissionCodes(ACTOR))
+                .thenReturn(List.of("rbac:role:read", "rbac:user:read"));
+
+        List<String> codes = service.queryOwnPermissionCodes();
+
+        assertEquals(List.of("rbac:role:read", "rbac:user:read"), codes);
+        verify(rbacCaseService).queryOwnPermissionCodes(ACTOR);
+    }
 }

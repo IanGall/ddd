@@ -177,6 +177,21 @@ public class RbacCaseService {
         return rbacDomainService.queryRolePermissionIds(actor.accountId(), roleId);
     }
 
+    /**
+     * 查询当前主体的有效权限码（去重、升序）。
+     *
+     * <p><b>刻意不做 RBAC 权限前置校验</b>：本接口是前端菜单与按钮的权限引导来源，若要求调用者
+     * 自身持有某个权限码会形成循环依赖——没有 RBAC 读权限的子账号将无法加载自己的权限集合
+     * （表现为前端菜单全空）。账号有效性仍由领域服务校验，因此停用账号即时失效。</p>
+     */
+    public List<String> queryOwnPermissionCodes(Actor actor) {
+        if (actor == null) {
+            throw new AppException(Constants.ResponseCode.ACCESS_DENIED.getCode(), "无权访问");
+        }
+        return accessControlService.findEffectivePermissionCodes(actor.accountId(), actor.userId(),
+                actor.principalName());
+    }
+
     private void requireRequest(Object command) {
         if (command == null) {
             throw new AppException(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), "请求不能为空");

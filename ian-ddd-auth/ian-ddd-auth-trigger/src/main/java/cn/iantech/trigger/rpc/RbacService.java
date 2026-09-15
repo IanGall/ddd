@@ -15,6 +15,8 @@ import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
 import org.apache.dubbo.config.annotation.DubboService;
 
+import java.util.List;
+
 /**
  * Dubbo 入站适配器，负责 API DTO、可信 Actor 与 RBAC 用例模型之间的转换。
  */
@@ -141,6 +143,11 @@ public class RbacService implements IRbacService {
         Long roleId = req == null ? null : req.getRoleId();
         return QueryRolePermissionIdsResp.builder().roleId(roleId)
                 .permissionIds(rbacCaseService.queryRolePermissionIds(actor(), roleId)).build();
+    }
+
+    @Override
+    public List<String> queryOwnPermissionCodes() {
+        return rbacCaseService.queryOwnPermissionCodes(actor());
     }
 
     private Actor actor() {

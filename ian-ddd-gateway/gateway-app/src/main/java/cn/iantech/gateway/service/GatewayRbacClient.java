@@ -7,6 +7,7 @@ import cn.iantech.gateway.core.service.RpcCallGuard;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 import static cn.iantech.common.constant.Constants.ResponseCode.RPC_ERROR;
@@ -101,6 +102,10 @@ public class GatewayRbacClient {
 
     public QueryRolePermissionIdsResp queryRolePermissionIds(QueryRolePermissionIdsReq request) {
         return invoke(() -> rbacService.queryRolePermissionIds(request));
+    }
+
+    public List<String> queryOwnPermissionCodes() {
+        return invoke(rbacService::queryOwnPermissionCodes);
     }
 
     private <T> T invoke(Supplier<T> invocation) {

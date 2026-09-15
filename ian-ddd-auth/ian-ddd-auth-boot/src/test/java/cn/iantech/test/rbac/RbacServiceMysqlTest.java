@@ -221,6 +221,50 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
         Assertions.assertEquals(List.of(permission2.getId()), secondQueryResult.getPermissionIds());
     }
 
+    // 权限引导端点：主账号拿账号内全部权限（含停用项与自定义权限），子账号拿角色聚合结果且过滤停用项，
+    // 并且都不要求调用者自身有权限
+    @Test
+    void shouldReturnOwnPermissionCodesForPrimaryAndSubAccount() {
+        RbacPermissionDTO enabledPermission = createPermission();
+        RbacPermissionDTO disabledPermission = createPermission();
+        rbacService.updatePermission(UpdateRbacPermissionReq.builder()
+                .id(disabledPermission.getId())
+                .permName("停用权限")
+                .permType(2)
+                .parentId(0L)
+                .status(Boolean.FALSE)
+                .build());
+
+        List<String> primaryCodes = rbacService.queryOwnPermissionCodes();
+        // 主账号与 authorize 的无条件放行一致：权限事实来源是账号内权限目录，且不过滤 status
+        Assertions.assertTrue(primaryCodes.contains(enabledPermission.getPermCode()),
+                "主账号应包含账号内的自定义权限码");
+        Assertions.assertTrue(primaryCodes.contains(disabledPermission.getPermCode()),
+                "主账号不得因权限停用而丢失权限码（否则会出现「接口能调通、菜单不显示」的错位）");
+        Assertions.assertEquals(primaryCodes.stream().distinct().sorted().toList(), primaryCodes,
+                "权限码必须去重且升序");
+
+        RbacUserDTO user = createUser();
+        RbacRoleDTO role = createRole();
+        Assertions.assertTrue(rbacService.replaceRolePermissions(ReplaceRolePermissionsReq.builder()
+                .roleId(role.getId())
+                .permissionIds(List.of(enabledPermission.getId(), disabledPermission.getId()))
+                .build()));
+
+        // 子账号此时没有任何权限码，调用仍成功——证明该端点不要求调用者自身持有权限码
+        switchActor(1L, user.getId(), user.getUsername());
+        Assertions.assertEquals(List.of(), rbacService.queryOwnPermissionCodes());
+
+        // 授予角色后拿到角色聚合结果：停用权限被 SQL 过滤，只剩启用中的那一项
+        switchActor(1L, "test-admin");
+        Assertions.assertTrue(rbacService.replaceUserRoles(ReplaceUserRolesReq.builder()
+                .userId(user.getId())
+                .roleIds(List.of(role.getId()))
+                .build()));
+        switchActor(1L, user.getId(), user.getUsername());
+        Assertions.assertEquals(List.of(enabledPermission.getPermCode()), rbacService.queryOwnPermissionCodes());
+    }
+
     @Test
     void shouldThrowWhenRequestIsNull() {
         assertIllegalParameter(() -> rbacService.createUser(null));
