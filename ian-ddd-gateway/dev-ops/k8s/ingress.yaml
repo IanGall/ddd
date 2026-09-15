@@ -1,11 +1,22 @@
-# 网关是唯一对外入口，这里把全部路径透传给网关，由网关自己完成路由与鉴权。
+# 网关的对外路由：在本机集群的 Ingress Controller（apisix）上只认领 /api 前缀。
+#
+# 为什么是 /api 而不是 /：
+# 管理端前端（ddd-web 仓）与本网关**共用同一个 host**（gateway.example.com），由它接走 /。
+# 同 host 下就是同源，浏览器不需要 CORS（网关也没有任何 CORS 配置与 OPTIONS 预检处理）。
+# 若这里继续写 /，两个 Ingress 会在「同一 host + 同一 path」上冲突，命中哪个后端是不确定的。
 #
 # 刻意不做的事：
 # 1. 不在 Ingress 复制网关的路径白名单（唯一真相在 GatewayAuthFilter 的 ROUTE_PREFIXES / ANONYMOUS_ROUTES，
-#    并有 GatewayPublicPathContractTest 交叉校验）。复制一份就是第二份真相，改一处忘一处会放大公开面。
+#    并有 GatewayPublicPathContractTest 交叉校验）。这里的 /api 比白名单更粗（白名单是
+#    /api/admin|app|external），粗粒度前缀不会成为第二份真相，细粒度判定仍然只在网关里。
 # 2. 不配 TLS：按既有部署约束保持 HTTP，TLS 由集群入口统一终结。
 # 3. 不写 server.forward-headers-strategy 相关注解：Ingress Controller 若只是追加客户端自带的 X-Forwarded-For，
 #    攻击者就能伪造它绕过登录风控；正式做法见同目录 README 的「客户端 IP」一节。
+#
+# 注意（路由语义变化）：收窄到 /api 后，只有 /api/** 会到达网关。此前由网关返回的
+# 「非 /api 路径 → NOT_FOUND(404)」语义（见 ian-ddd-gateway/README.md）在该 host 上不会再被触发——
+# 这些路径现在由前端 nginx 处理（它有自己的 SPA fallback 与 404 页）。网关自身的 404 语义仍然有效，
+# 只是入口位置前移到了前端。同理 /actuator/health 也不再经 Ingress 暴露（k8s 探针走集群内直连，不受影响）。
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -16,11 +27,10 @@ spec:
   # 本机 OrbStack 集群的 Ingress Controller 为 apisix；换成其他控制器时改这里（必须是小写 DNS 标签）
   ingressClassName: apisix
   rules:
-    # 占位域名，部署前替换为真实域名
     - host: gateway.example.com
       http:
         paths:
-          - path: /
+          - path: /api
             pathType: Prefix
             backend:
               service:

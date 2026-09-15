@@ -78,10 +78,18 @@ kubectl apply --dry-run=server -n "$NS" -f ian-ddd-gateway/dev-ops/k8s/
 
 ## 3. 对外暴露与路由
 
-- Ingress 只把 `path: /` 全量转给网关，**不复制路径白名单、不加路径级鉴权**：网关自己就是路由与鉴权的唯一真相
+- Ingress 只认领 **`path: /api`**，**不复制路径白名单、不加路径级鉴权**：网关自己就是路由与鉴权的唯一真相
   （`GatewayAuthFilter` 的 `ROUTE_PREFIXES` / `ANONYMOUS_ROUTES`，并有契约测试交叉校验）。
-- `GET /actuator/health` 经 Ingress 可公开访问，这是有意为之：actuator 只暴露 health，`show-details` 默认 `never`，
-  响应仅 `{"status":"UP"}`。若不接受，可在 Ingress 做路径级拒绝，而不要改应用侧白名单。
+- **为什么不是 `/`**：管理端前端（`ddd-web` 仓）与本网关**共用同一个 host** `gateway.example.com`，由它接走 `/`；
+  同 host 即同源，浏览器不需要 CORS（网关没有任何 CORS 配置，`OPTIONS` 预检还会被白名单过滤器拦成 401）。
+  若这里写 `/`，两个 Ingress 在同一 host + 同一 path 上冲突，命中哪个后端不确定。
+  `/api` 比白名单（`/api/admin|app|external`）更粗，因此不构成「第二份真相」。
+- **路由语义随之变化**：收窄后只有 `/api/**` 到达网关。此前由网关返回的「非 `/api` 路径 → `NOT_FOUND`(404)」
+  在该 host 上不会再被触发——这些路径现由前端 nginx 处理（它有独立的 SPA fallback 与 404 页）；
+  网关自身的 404/403 语义依然有效，只是入口位置前移了。
+- `GET /actuator/health` **不再经 Ingress 暴露**（它不在 `/api` 下）。k8s 的 `startupProbe`/`readinessProbe`/`livenessProbe`
+  走集群内直连 Service，不受影响；要从宿主机查探活请用
+  `kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092` 后访问 `127.0.0.1:8092/actuator/health`。
 - 网关不持有数据源，因此 `health` 为 UP 即代表真正可服务，不会出现「端口通了但依赖没通」的假就绪。
 
 ## 4. 客户端 IP：一个已知限制
@@ -138,10 +146,17 @@ kubectl rollout restart deployment/ian-ddd-gateway -n "$NS"
 ## 8. 从宿主机访问（不需要 port-forward）
 
 宿主机上直接可用 `127.0.0.1:80`（apisix 的 LoadBalancer 被 OrbStack 映射到本机）+ Ingress 的 Host 头访问网关，不需要
-`kubectl port-forward`：
+`kubectl port-forward`。**注意只有 `/api/**` 会打到网关**（见第 3 节），`/` 与 `/actuator/*` 归前端处理：
 
 ```bash
-curl -H 'Host: gateway.example.com' http://127.0.0.1/actuator/health     # 200 / {"status":"UP"}
+# 业务调用（经 Ingress 到网关；用错密码即证明全链路通，返回 401 AUTH_REQUIRED 是预期）
+curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
+  -X POST -d '{"loginName":"nobody@1.com","password":"wrong-password"}' \
+  http://127.0.0.1/api/admin/auth/login
+
+# 探活不在 /api 下，经 Ingress 拿不到，用 port-forward 直连
+kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092 &
+curl http://127.0.0.1:8092/actuator/health     # 200 / {"status":"UP"}
 ```
 
 `infra` 里的 MySQL（3306）、Redis（6379）、Nacos（8848/9848）、Kafka（9092）同样映射在宿主 `127.0.0.1` 上。
@@ -150,5 +165,6 @@ curl -H 'Host: gateway.example.com' http://127.0.0.1/actuator/health     # 200 /
 
 ## 9. 本机验证的限制
 
-OrbStack 自带集群没有 metrics-server，HPA 对象能被创建但一直显示 `<unknown>`、不会伸缩；
-`kubectl apply --dry-run=server` 只校验 schema 与 admission 规则，不能替代真实伸缩验证。
+`kubectl apply --dry-run=server` 只校验 schema 与 admission 规则，不能替代真实部署验证；HPA 的伸缩行为也需要
+metrics-server 实际产出指标（本机 OrbStack 集群已装 `kube-system/metrics-server`，`kubectl top` 与 HPA 的
+`TARGETS` 均可用）。
