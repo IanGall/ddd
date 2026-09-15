@@ -1,8 +1,10 @@
 # 生产分片配置模板：路由规则与 dev/autotest 一致，物理库地址、库名与凭证全部由部署环境注入。
 #
-# 数据源地址/库名/凭证使用 $${VAR} 占位符，由 JDBC URL 的 ?placeholder-type=environment 触发环境变量渲染。
-# 敏感项刻意**不给默认值**：漏配时直接以配置错误暴露，而不是拼出 jdbc:mysql://:3306/ 这类畸形 URL，
-# 更不能退化为空账号/空口令连库。仅非敏感的端口保留 3306 默认值。
+# 占位符语法（ShardingSphere 硬性要求，见 URLArgumentLine 的 PLACEHOLDER_PATTERN = \$\$\{(.*?)::(.*?)}）：
+# **必须写成「两美元符号 + 大括号 + 变量名 + 双冒号 + 默认值」，双冒号不能省略**——少了双冒号不会被正则匹配，
+# 占位符会原样留在 YAML 里，表现为「环境变量怎么改都不生效」。默认值允许为空串，但本文件刻意用
+# *_NOT_SET 这类哨兵值，让漏配时以一眼可辨的错误暴露（例如 UnknownHostException: MYSQL_HOST_NOT_SET），
+# 而不是拼出 jdbc:mysql://:3306/ 这种畸形 URL，或退化成空账号/空口令连库。
 # 必须注入：MYSQL_HOST、MYSQL_DATABASE_00、MYSQL_DATABASE_01、MYSQL_DATABASE_RBAC、MYSQL_USERNAME、MYSQL_PASSWORD。
 mode:
   # 运行模式类型。可选配置：内存模式 Memory、单机模式 Standalone、集群模式 Cluster - 目前为单机模式
@@ -12,9 +14,9 @@ dataSources:
   ds_0:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://$${MYSQL_HOST}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_00}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: "$${MYSQL_USERNAME}"
-    password: "$${MYSQL_PASSWORD}"
+    jdbcUrl: jdbc:mysql://$${MYSQL_HOST::MYSQL_HOST_NOT_SET}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_00::MYSQL_DATABASE_00_NOT_SET}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
+    username: "$${MYSQL_USERNAME::MYSQL_USERNAME_NOT_SET}"
+    password: "$${MYSQL_PASSWORD::MYSQL_PASSWORD_NOT_SET}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000
@@ -24,9 +26,9 @@ dataSources:
   ds_1:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://$${MYSQL_HOST}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_01}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: "$${MYSQL_USERNAME}"
-    password: "$${MYSQL_PASSWORD}"
+    jdbcUrl: jdbc:mysql://$${MYSQL_HOST::MYSQL_HOST_NOT_SET}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_01::MYSQL_DATABASE_01_NOT_SET}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
+    username: "$${MYSQL_USERNAME::MYSQL_USERNAME_NOT_SET}"
+    password: "$${MYSQL_PASSWORD::MYSQL_PASSWORD_NOT_SET}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000
@@ -36,9 +38,9 @@ dataSources:
   ds_rbac:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://$${MYSQL_HOST}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_RBAC}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
-    username: "$${MYSQL_USERNAME}"
-    password: "$${MYSQL_PASSWORD}"
+    jdbcUrl: jdbc:mysql://$${MYSQL_HOST::MYSQL_HOST_NOT_SET}:$${MYSQL_PORT::3306}/$${MYSQL_DATABASE_RBAC::MYSQL_DATABASE_RBAC_NOT_SET}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&connectTimeout=5000&socketTimeout=5000&tcpKeepAlive=true
+    username: "$${MYSQL_USERNAME::MYSQL_USERNAME_NOT_SET}"
+    password: "$${MYSQL_PASSWORD::MYSQL_PASSWORD_NOT_SET}"
     connectionTimeoutMilliseconds: 30000
     idleTimeoutMilliseconds: 60000
     maxLifetimeMilliseconds: 1800000

@@ -113,8 +113,8 @@ kubectl rollout status  deployment/ian-ddd-auth -n "$NS"
 
 | 方式 | 注入 | 说明 |
 | --- | --- | --- |
-| A. 普通 JDBC（**当前可用**） | `SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver` + `SPRING_DATASOURCE_URL=jdbc:mysql://mysql.infra.svc.cluster.local:3306/ddd_rbac?...` + `SPRING_DATASOURCE_USERNAME/PASSWORD` | 绕过 ShardingSphere，指向 RBAC 表所在的单库；**代价：分片表 `user_order` 不可用**。用于本地 dev 验证接口足够 |
-| B. 走分片配置（目标形态） | `SPRING_DATASOURCE_URL=jdbc:shardingsphere:classpath:sharding/sharding-jdbc-prod.yaml?placeholder-type=environment` | 保留分片能力；**当前连不上 MySQL（BE-56）**，修好后应改回这一种 |
+| B. 走分片配置（**推荐**） | `SPRING_DATASOURCE_URL=jdbc:shardingsphere:classpath:sharding/sharding-jdbc-prod.yaml?placeholder-type=environment` | 保留分片能力；库地址/库名/账号口令全部来自 `MYSQL_*` 环境变量。已在本地集群实测可连（预热通过、登录返回业务错误码） |
+| A. 普通 JDBC | `SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver` + `SPRING_DATASOURCE_URL=jdbc:mysql://mysql.infra.svc.cluster.local:3306/ddd_rbac?...` + `SPRING_DATASOURCE_USERNAME/PASSWORD` | 只在不需要分片时用（例如只想验证接口），**代价：分片表 `user_order` 不可用** |
 
 最小 dev 流程（本地集群示例，密钥取自仓库根 `.env.local`）：
 
@@ -138,10 +138,8 @@ MYSQL_DATABASE_RBAC=ddd_rbac
 MYSQL_USERNAME=<你的库账号>
 KAFKA_ENABLED=false
 CHANNEL_ENCRYPTION_KEY_ID=dev-key-v1
-# 方式 A：普通 JDBC 覆盖（当前可用；方式 B 的取值见表）
-SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql.infra.svc.cluster.local:3306/ddd_rbac?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false
-SPRING_DATASOURCE_USERNAME=<你的库账号>
+# 数据源覆盖（方式 B，推荐；方式 A 的取值见上面的表）
+SPRING_DATASOURCE_URL=jdbc:shardingsphere:classpath:sharding/sharding-jdbc-prod.yaml?placeholder-type=environment
 EOF
 
 # 敏感项用同一个 env 文件喂给 secret（键名与 prod 完全一致）
@@ -151,7 +149,6 @@ REDIS_PASSWORD=<...>
 DUBBO_REGISTRY_PASSWORD=<...>
 CHANNEL_ENCRYPTION_MASTER_KEY=<...>
 PLATFORM_ADMIN_TOKEN=<...>
-SPRING_DATASOURCE_PASSWORD=<...>
 EOF
 
 kubectl create configmap ian-ddd-auth-config -n "$NS" --from-env-file=/tmp/dev.cm.env --dry-run=client -o yaml | kubectl apply -f -
@@ -166,9 +163,9 @@ rm -f /tmp/dev.cm.env /tmp/dev.secret.env
 - 环境差异只放进 ConfigMap / Secret，**不要用 `kubectl set env` 临时改 Deployment**：`env` 是带 merge key 的列表，
   下一次 `kubectl apply -f deployment.yaml` 会把这些临时项清掉，表现为"改好的配置莫名其妙又坏了"。
 - `KAFKA_ENABLED=false` 只是本地降噪：infra 的 Kafka 通告地址是 `kafka:9092`，跨命名空间解析不了（与本清单无关）。
-- **已知问题（BE-56）**：走分片配置时在本集群连不上 MySQL（`Connect timed out`，21s 预热失败，登录 504 `RPC_TIMEOUT`）；
-  已实测**换成普通 JDBC 就正常**（预热 170ms、经 Ingress 登录返回业务错误码），因此问题定位在 ShardingSphere 分片配置这条
-  路径上，详细证据见 `docs/plans/project-optimization-plan.md` 的 BE-56 行。
+- 分片配置的占位符**必须带双冒号**（`$${VAR::默认值}`）：ShardingSphere 的正则只匹配带 `::` 的形式，少了就不替换、
+  原样留在 YAML 里，表现为「环境变量怎么改都不生效」。`DeployConfigConsistencyTest` 已把这条规则与
+  「配置引用的环境变量必须在 ConfigMap/Secret 里齐备」一起钉进构建。
 
 ## 9. 从宿主机访问（不需要 port-forward）
 
