@@ -3,13 +3,13 @@
 #
 # 默认：**自动跟随本机（Docker 服务端）架构**——arm64 机器上出 arm64 镜像、amd64 机器上出 amd64 镜像，
 #       并载入本地镜像库（可直接 docker run，本地 k8s 也能直接用）
-#   bash build.sh
+#   bash gateway-app/build.sh
 #
 # 指定架构（例如在 arm64 机器上出 amd64 镜像，会走 QEMU/Rosetta 仿真，较慢）：
-#   PLATFORMS=linux/amd64 bash build.sh
+#   PLATFORMS=linux/amd64 bash gateway-app/build.sh
 #
 # 双架构（linux/amd64 + linux/arm64）：多平台镜像无法 --load 到本地，必须推到镜像仓库
-#   IMAGE=<可推送的仓库>/ian-ddd-auth-boot PLATFORMS=linux/amd64,linux/arm64 bash build.sh
+#   IMAGE=<可推送的仓库>/ian-ddd-gateway PLATFORMS=linux/amd64,linux/arm64 bash gateway-app/build.sh
 #   首次还需要一个支持 manifest list 的 builder：
 #   docker buildx create --name multiarch --driver docker-container --bootstrap --use
 set -euo pipefail
@@ -18,7 +18,7 @@ set -euo pipefail
 # 因为下面的 -f ./Dockerfile 与构建上下文 . 都是相对当前目录解析的
 cd "$(dirname "$0")"
 
-IMAGE="${IMAGE:-system/ian-ddd-auth-boot}"
+IMAGE="${IMAGE:-system/ian-ddd-gateway}"
 TAG="${TAG:-1.0-SNAPSHOT}"
 
 # 未显式指定架构时跟随 Docker 服务端架构；守护进程不可达时退回本机 uname

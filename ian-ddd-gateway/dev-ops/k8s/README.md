@@ -15,24 +15,25 @@
 
 ## 1. 前置：构建镜像
 
-网关模块没有 `build.sh`，在仓库根执行：
+在仓库根执行（脚本自带架构识别）：
 
 ```bash
-docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT \
-  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
+bash ian-ddd-gateway/gateway-app/build.sh      # 自动跟随本机架构 → system/ian-ddd-gateway:1.0-SNAPSHOT
 ```
 
 镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
-架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**：
+架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**。`build.sh` 会读 Docker 服务端架构自动决定构建哪个架构：
 
 ```bash
+PLATFORMS=linux/amd64 bash ian-ddd-gateway/gateway-app/build.sh     # 显式指定单一架构（跨架构走仿真，较慢）
+
+# 双架构：多平台镜像无法 --load 到本地，必须推到镜像仓库
 docker buildx create --name multiarch --driver docker-container --bootstrap --use   # 首次需要
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t <可推送的仓库>/ian-ddd-gateway:1.0-SNAPSHOT \
-  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app --push
+IMAGE=<可推送的仓库>/ian-ddd-gateway PLATFORMS=linux/amd64,linux/arm64 \
+  bash ian-ddd-gateway/gateway-app/build.sh
 ```
 
-（多平台镜像无法 `--load` 到本地，必须推送；只出一套架构时用 `docker buildx build --platform linux/amd64 --load`。）
+混架构集群必须用最后一种推多架构镜像；单架构环境用默认的自动识别即可。
 注意 alpine 与 Ubuntu 基础镜像的两处差异：`apt-get` 要换成 `apk`，且**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
 `/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）。
 

@@ -208,21 +208,18 @@ C 端注册登录、渠道凭证管理与异常语义。
 k8s 清单位于 `ian-ddd-gateway/dev-ops/k8s/`（原生 YAML：Deployment / Service / ConfigMap / Secret 示例 / HPA / PDB / Ingress），
 操作步骤、凭证创建方式与已知限制见该目录的 `README.md`。
 
-网关模块没有 `build.sh`，镜像直接在仓库根构建：
+网关模块的镜像用模块自带的脚本构建（脚本会自动识别本机架构）：
 
 ```bash
-# 本机架构
-docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT \
-  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
+bash ian-ddd-gateway/gateway-app/build.sh        # 自动跟随本机架构 → system/ian-ddd-gateway:1.0-SNAPSHOT
 
-# amd64 + arm64 双架构（多平台镜像无法 --load，必须推到镜像仓库）
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t <可推送的仓库>/ian-ddd-gateway:1.0-SNAPSHOT \
-  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app --push
+# 指定架构 / amd64 + arm64 双架构（多平台镜像无法 --load，必须推到镜像仓库）
+PLATFORMS=linux/amd64 bash ian-ddd-gateway/gateway-app/build.sh
+IMAGE=<可推送的仓库>/ian-ddd-gateway PLATFORMS=linux/amd64,linux/arm64 bash ian-ddd-gateway/gateway-app/build.sh
 ```
 
 基础镜像是 `eclipse-temurin:21-jre-alpine`（官方 manifest list 自带 amd64/arm64），Dockerfile 无架构相关指令，
-因此同一份 Dockerfile 即可出双架构镜像。
+因此同一份 Dockerfile 即可出双架构镜像；混架构集群必须用最后一种推多架构镜像。
 
 - 网关是唯一对外入口：Service 为 ClusterIP，对外经 `ingress.yaml`（`ingressClassName: apisix`，host 为占位）。
 - Ingress 只做全量路径透传，**不复制路径白名单**：白名单的唯一真相在 `GatewayAuthFilter`，重复一份就会出现第二份真相。

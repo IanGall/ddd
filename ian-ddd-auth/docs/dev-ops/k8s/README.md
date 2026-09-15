@@ -17,18 +17,23 @@
 以下命令默认在**仓库根**（`ddd`）执行。
 
 ```bash
-bash ian-ddd-auth/ian-ddd-auth-boot/build.sh        # system/ian-ddd-auth-boot:1.0-SNAPSHOT（本机架构）
+bash ian-ddd-auth/ian-ddd-auth-boot/build.sh        # 自动跟随本机架构 → system/ian-ddd-auth-boot:1.0-SNAPSHOT
 ```
 
 镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
-架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**：
+架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**。`build.sh` 会读 Docker 服务端架构自动决定构建哪个架构（`arm64` 机器出
+`linux/arm64`、`amd64` 机器出 `linux/amd64`，守护进程不可达时退回 `uname`）：
 
 ```bash
-# 双架构：多平台镜像无法 --load 到本地，必须推到镜像仓库（arm64 机型上构建 amd64 会走 QEMU/Rosetta 仿真，较慢）
+PLATFORMS=linux/amd64 bash ian-ddd-auth/ian-ddd-auth-boot/build.sh    # 显式指定单一架构（跨架构会走 QEMU/Rosetta 仿真）
+
+# 双架构：多平台镜像无法 --load 到本地，必须推到镜像仓库（arm64 机型上构建 amd64 会走仿真，较慢）
 docker buildx create --name multiarch --driver docker-container --bootstrap --use   # 首次需要
 IMAGE=<可推送的仓库>/ian-ddd-auth-boot PLATFORMS=linux/amd64,linux/arm64 \
   bash ian-ddd-auth/ian-ddd-auth-boot/build.sh
 ```
+
+混架构集群（既有 arm64 又有 amd64 节点）必须用最后一种推多架构镜像；单架构环境用默认的自动识别即可。
 
 注意 alpine 与 Ubuntu 基础镜像的三处差异：`apt-get` 要换成 `apk`；**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
 `/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）；alpine 用的是 **musl libc**，其 DNS 解析器在「响应超过 512 字节 /
