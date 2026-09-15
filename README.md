@@ -224,6 +224,9 @@ curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
 - **Ingress 的 host 是占位值** `gateway.example.com`：要用真实域名就往 `/etc/hosts` 加 `127.0.0.1 gateway.example.com`，
   或 `curl --resolve gateway.example.com:80:127.0.0.1`。
 - **别用 `192.168.139.2`**（LoadBalancer 的 EXTERNAL-IP）——它在宿主机不可达。
+- **404 先看响应体**：`{"error_msg":"404 Route Not Found"}` 是 **apisix 层**没匹配到 Host（检查 `Host` 头是不是 Ingress 声明过的域名，
+  Apifox/Postman 会自动从 URL 生成 `Host`，改过 URL 后要把手动存下来的那条删掉）；`{"code":"NOT_FOUND","info":"请求路径不存在"}`
+  才是网关自己的 404（路径不在白名单）。
 - **健康检查的边界**：网关 `/actuator/health` UP 只代表网关自身；认证服务 TCP 20880 通也不代表依赖就绪（MySQL 挂掉时它仍是
   `Ready`，业务请求会返回 504 `RPC_TIMEOUT`）。容器内自检：网关镜像有 `curl`，认证镜像只有 `bash`/`nc`
   （`nc -z -w 3 127.0.0.1 20880`，或用 `bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/20880'`）。
