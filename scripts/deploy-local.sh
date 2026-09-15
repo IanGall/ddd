@@ -13,7 +13,9 @@
 # 选项：
 #   --service all|auth|gateway   默认 all；clean 时只清单个服务的资源（命名空间与另一个服务保留）
 #   --profile dev|prod           默认 dev；prod 需要自备强密钥（见下）
-#   --namespace NAME             默认 ian-ddd
+#   --k8s-namespace NAME         k8s 命名空间，默认 ian-ddd（等价别名 --namespace）
+#   --nacos-namespace NAME       Nacos 命名空间（=注册中心的租户 ID），默认 dev-test；
+#                                传 public 或空字符串表示用默认命名空间（地址里不加 namespace 参数）
 #   --replicas N|keep            本地副本数，默认 1（两个服务各 1 个 Pod，HPA minReplicas 同步收到 N）；
 #                                keep = 完全按清单（HPA 2→8/2→6），需要验证 HPA 伸缩时用它
 #   --skip-build                 deploy 时跳过 Maven 与镜像构建，只刷配置并滚动
@@ -22,18 +24,27 @@
 # 幂等：deploy 把「镜像 ID + 配置内容」的摘要打成 Deployment 的 Pod 模板注解，内容没变就跳过滚动更新；
 #       改代码、改 .env.local、换 profile 都会自动触发滚动，因此重复执行安全。
 #
+# 两个命名空间是两件独立的事（参数默认值可用环境变量覆盖，也可写进 .env.local）：
+#   · k8s 命名空间：部署到哪个集群命名空间（--k8s-namespace / NAMESPACE）
+#   · Nacos 命名空间：注册到哪个注册中心租户（--nacos-namespace / DUBBO_REGISTRY_NAMESPACE，默认 dev-test）
+#
+#   为什么集群要单独占一个 Nacos 命名空间：本机覆盖率流水线
+#   （ddd-base/ian-ddd-coverage/coverage-e2e.sh）跑在默认命名空间、用的是**测试库**
+#   （autotest profile → ddd_rbac_test / ian_test_tech_db_*），而本脚本部署的集群用**开发库**。
+#   两者若同处一个命名空间，本机网关会把认证 RPC 按随机负载均衡分给两边的实例：在一边注册/开户的账号
+#   落到另一边就查不到，表现为随机的「账号或密码错误」，同时本机覆盖率静默漏采（请求根本没打到本机）。
+#   注意 Dubbo 的 namespace 参数是命名空间 **ID**（不是显示名）：Nacos 里没有以该值为 ID 的记录时服务
+#   照样注册，但控制台按 ID 选命名空间、列不出这个租户（看起来像「部署的服务不在命名空间里」）。
+#   deploy 前会自动确保该命名空间存在（用 NACOS_API_URL 调 Nacos 3.x 的 admin API；失败只告警不阻断）。
+#
 # 可覆盖的环境变量（默认按本机集群的 infra 命名空间）：
 #   MYSQL_HOST MYSQL_PORT MYSQL_DATABASE_00 MYSQL_DATABASE_01 MYSQL_DATABASE_RBAC
-#   REDIS_HOST REDIS_PORT NACOS_HOST DUBBO_REGISTRY_NAMESPACE KAFKA_BOOTSTRAP_SERVERS KAFKA_ENABLED
+#   REDIS_HOST REDIS_PORT NACOS_HOST NACOS_API_URL DUBBO_REGISTRY_NAMESPACE KAFKA_BOOTSTRAP_SERVERS KAFKA_ENABLED
 #   DDD_ID_GENERATOR_NAMESPACE CHANNEL_ENCRYPTION_MASTER_KEY PLATFORM_ADMIN_TOKEN IMAGE_PREFIX
 #   中间件口令默认读仓库根 .env.local；显式传入的同名环境变量优先。
 #
-# DUBBO_REGISTRY_NAMESPACE（默认 dev-test，设空值回到 public）：集群部署注册到独立的 Nacos 命名空间。
-#   Nacos 的命名空间是注册中心的隔离边界，与 k8s 的 namespace 无关。本机覆盖率流水线
-#   （ddd-base/ian-ddd-coverage/coverage-e2e.sh）跑在 public 命名空间，且用的是**测试库**
-#   （autotest profile → ddd_rbac_test / ian_test_tech_db_*），而本脚本部署的集群用**开发库**。
-#   两者若同处 public，本机网关会把认证 RPC 按随机负载均衡分给两边的实例：在一边注册/开户的账号
-#   落到另一边就查不到，表现为随机的「账号或密码错误」，同时本机覆盖率静默漏采（请求根本没打到本机）。
+# NACOS_API_URL（默认 http://127.0.0.1:8848）：宿主机可达的同一套 Nacos 的 HTTP 入口，仅用于上面这步
+#   命名空间检查。跑远端集群时本脚本不适用（见下），也不会依赖它。
 #
 # 依赖：docker（含 buildx）、kubectl、JDK 21 + Maven（仅 deploy 且未 --skip-build 时需要）、.env.local。
 # 适用范围：本机/联调集群（直接用本地 Docker 里构建的镜像，不推仓库）。
@@ -47,6 +58,7 @@ ACTION="deploy"
 SERVICE="all"
 PROFILE="dev"
 NAMESPACE="ian-ddd"
+NACOS_NAMESPACE_CLI=""      # 由 --nacos-namespace 赋值；空 = 未指定，走环境变量/.env.local/默认值
 SKIP_BUILD="no"
 REPLICAS="1"
 PURGE="no"
@@ -60,7 +72,8 @@ die() {
   exit 1
 }
 
-usage() { sed -n '2,26p' "$0" | sed -e 's/^# \{0,1\}//'; }
+# -h 打印文件头的全部注释（选项与环境变量说明），新增说明行不用同步改行号
+usage() { awk 'NR == 1 { next } /^[^#]/ { exit } { print }' "$0" | sed -e 's/^# \{0,1\}//'; }
 
 # 允许省略动作（bash deploy-local.sh --service auth 等价于 deploy --service auth）
 if [ $# -gt 0 ]; then
@@ -80,8 +93,12 @@ while [ $# -gt 0 ]; do
       PROFILE="${2:?--profile 需要取值：dev|prod}"
       shift
       ;;
-    --namespace)
-      NAMESPACE="${2:?--namespace 需要取值}"
+    --namespace | --k8s-namespace)
+      NAMESPACE="${2:?--k8s-namespace 需要取值（k8s 命名空间，默认 ian-ddd）}"
+      shift
+      ;;
+    --nacos-namespace)
+      NACOS_NAMESPACE_CLI="${2:?--nacos-namespace 需要取值（Nacos 命名空间 ID，默认 dev-test；public 表示默认命名空间）}"
       shift
       ;;
     --skip-build) SKIP_BUILD="yes" ;;
@@ -158,6 +175,12 @@ do_status() {
   kubectl get pods -n "${NAMESPACE}" \
     -o custom-columns='POD:.metadata.name,READY:.status.containerStatuses[0].ready,STATUS:.status.phase,RESTARTS:.status.containerStatuses[0].restartCount' 2>/dev/null | sed 's/^/  /' || true
   kubectl get hpa,ingress -n "${NAMESPACE}" 2>/dev/null | sed 's/^/  /' || true
+  # 各服务实际生效的注册中心地址（含 Nacos 命名空间），排查实例互相发现时先看这里
+  local cm addr
+  for cm in $(kubectl get cm -n "${NAMESPACE}" -o name 2>/dev/null | grep -- '-config$' || true); do
+    addr="$(kubectl get "${cm}" -n "${NAMESPACE}" -o jsonpath='{.data.DUBBO_REGISTRY_ADDRESS}' 2>/dev/null || true)"
+    [ -n "${addr}" ] && printf '  %s 注册中心: %s\n' "${cm#configmap/}" "${addr}"
+  done
   log "最近事件（尾部 10 条）："
   kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp 2>/dev/null | tail -10 | sed 's/^/  /' || true
 }
@@ -277,8 +300,19 @@ load_config() {
   resolve REDIS_HOST "redis.infra.svc.cluster.local"
   resolve REDIS_PORT "6379"
   resolve NACOS_HOST "nacos.infra.svc.cluster.local"
-  # 独立命名空间，避免与本机覆盖率流水线的实例互相发现（原因见文件头）
-  resolve DUBBO_REGISTRY_NAMESPACE "dev-test"
+  # 宿主机可达的 Nacos HTTP 入口，仅用于「确保命名空间存在」这一步
+  resolve NACOS_API_URL "http://127.0.0.1:8848"
+  # 注册中心命名空间：--nacos-namespace > 环境变量/.env.local 的 DUBBO_REGISTRY_NAMESPACE > 默认 dev-test
+  if [ -n "${NACOS_NAMESPACE_CLI}" ]; then
+    DUBBO_REGISTRY_NAMESPACE="${NACOS_NAMESPACE_CLI}"
+  else
+    resolve DUBBO_REGISTRY_NAMESPACE "dev-test"
+  fi
+  # public 就是默认命名空间，等价于「不加 namespace 参数」
+  if [ "${DUBBO_REGISTRY_NAMESPACE}" = "public" ]; then
+    DUBBO_REGISTRY_NAMESPACE=""
+  fi
+  export DUBBO_REGISTRY_NAMESPACE
   resolve KAFKA_BOOTSTRAP_SERVERS "kafka.infra.svc.cluster.local:9092"
   # 本地 infra 的 Kafka 通告地址是 kafka:9092，跨命名空间解析不了；默认关掉降噪
   resolve KAFKA_ENABLED "false"
@@ -390,6 +424,40 @@ ensure_namespace() {
   kubectl create namespace "${NAMESPACE}"
 }
 
+# 确保 Nacos 里存在 DUBBO_REGISTRY_NAMESPACE 这个命名空间（记录）。
+#
+# Dubbo 的 namespace 参数是**命名空间 ID**：ID 在 Nacos 里没有对应记录时客户端照样注册成功，
+# 但那个租户在控制台里列不出来（控制台按 ID 选命名空间），表现为「部署的服务在命名空间里看不到」。
+# 传 public/空值表示用默认命名空间，不需要这一步。失败只告警，不阻断部署。
+ensure_registry_namespace() {
+  [ -n "${DUBBO_REGISTRY_NAMESPACE}" ] || return 0
+  command -v curl >/dev/null || { warn "找不到 curl，跳过 Nacos 命名空间检查"; return 0; }
+
+  local api="${NACOS_API_URL}" token listing
+  token="$(curl -s -m 5 -X POST "${api}/nacos/v1/auth/login" \
+    --data-urlencode "username=nacos" --data-urlencode "password=${DUBBO_REGISTRY_PASSWORD}" 2>/dev/null \
+    | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)"
+  if [ -z "${token}" ]; then
+    warn "无法登录 Nacos（${api}），跳过命名空间检查；若控制台看不到服务，见文件头「两个命名空间」说明"
+    return 0
+  fi
+  listing="$(curl -s -m 5 "${api}/nacos/v3/admin/core/namespace/list?pageNo=1&pageSize=200&accessToken=${token}" || true)"
+  case "${listing}" in
+    *"\"namespace\":\"${DUBBO_REGISTRY_NAMESPACE}\""*) return 0 ;;
+  esac
+
+  log "创建 Nacos 命名空间 ${DUBBO_REGISTRY_NAMESPACE}"
+  curl -s -m 5 -X POST "${api}/nacos/v3/admin/core/namespace?accessToken=${token}" \
+    --data-urlencode "namespaceId=${DUBBO_REGISTRY_NAMESPACE}" \
+    --data-urlencode "namespaceName=${DUBBO_REGISTRY_NAMESPACE}" \
+    --data-urlencode "namespaceDesc=本地联调集群（scripts/deploy-local.sh）" >/dev/null 2>&1 || true
+  listing="$(curl -s -m 5 "${api}/nacos/v3/admin/core/namespace/list?pageNo=1&pageSize=200&accessToken=${token}" || true)"
+  case "${listing}" in
+    *"\"namespace\":\"${DUBBO_REGISTRY_NAMESPACE}\""*) ;;
+    *) warn "命名空间 ${DUBBO_REGISTRY_NAMESPACE} 仍不存在，请手工确认 Nacos 版本（本脚本按 Nacos 3.x API 调用）" ;;
+  esac
+}
+
 apply_config() {
   local svc="$1" prefix="$2"
   write_config "${svc}"
@@ -461,7 +529,9 @@ do_deploy() {
   load_config
   TMP_DIR="$(mktemp -d)"
   trap 'rm -rf "${TMP_DIR}"' EXIT
+  log "部署到 k8s 命名空间 ${NAMESPACE}，注册中心命名空间 ${DUBBO_REGISTRY_NAMESPACE:-public（默认）}"
   ensure_namespace
+  ensure_registry_namespace
   local svc
   for svc in $(service_list); do deploy_service "${svc}"; done
   do_status

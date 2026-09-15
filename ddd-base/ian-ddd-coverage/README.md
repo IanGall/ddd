@@ -169,7 +169,7 @@ curl -X POST http://127.0.0.1:8092/api/admin/platform/accounts \
 > 账号落到另一边就查不到，表现为随机的 `AUTH_REQUIRED 账号或密码错误`，同时本机覆盖率静默漏采（请求根本没打到本机，
 > 报告里表现为 auth 覆盖率异常偏低）。
 >
-> 因此部署集群**请用 `scripts/deploy-local.sh`**（默认 `DUBBO_REGISTRY_NAMESPACE=dev-test`），不要手工
+> 因此部署集群**请用 `scripts/deploy-local.sh`**（`--nacos-namespace`，默认 `dev-test`），不要手工
 > `kubectl apply -f <清单目录>`：手工 apply 会用仓库里那份 prod 模板覆盖脚本生成的 ConfigMap，把集群实例塞回 public。
 > 排查：在本流水线所用的命名空间里查应用级服务名 `ian-ddd-auth` 的实例列表，应当只有本机这一个；两个 IP 同时出现即命中。
 
