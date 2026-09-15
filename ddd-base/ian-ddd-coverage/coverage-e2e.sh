@@ -301,20 +301,20 @@ cleanup_on_exit() {
 
 # ---------------------------------------------------------------- 各阶段
 
+# 从仓库根聚合统一构建：分目录构建（ddd-base / auth / gateway 各来一遍）有三个坑——
+#   ① 根聚合 pom 不随子目录构建安装，而 ${dubbo.version} 这类属性是经本地仓库里的
+#      ddd-dependencies / ddd-base-bom 沿父链解析的，改了根 pom 也不会传导到运行期，
+#      服务会静默地继续用本地仓库里的旧依赖版本；
+#   ② 契约模块（ian-ddd-api）不挂在 ddd-base 下，分目录构建会漏掉它，而 preflight 要求其 classes 存在；
+#   ③ 覆盖率控制器与各服务的 classes 也由根聚合一并产出，避免产物来自不同批次。
 build_all() {
     if [[ "${COVERAGE_SKIP_BUILD:-0}" == "1" ]]; then
         info "跳过构建（COVERAGE_SKIP_BUILD=1）"
         return 0
     fi
-    info "清理并构建 ddd-base（含覆盖率模块）"
-    (cd "${DDD_BASE_DIR}" && mvn -q -o clean install -DskipTests) \
-        || fail "ddd-base 构建失败"
-    info "清理并构建认证服务"
-    (cd "${AUTH_DIR}" && mvn -q -o clean install -DskipTests) \
-        || fail "认证服务构建失败"
-    info "清理并构建 Gateway"
-    (cd "${GATEWAY_DIR}" && mvn -q -o clean install -DskipTests) \
-        || fail "Gateway 构建失败"
+    info "清理并构建工作区全部模块（根聚合：ddd-base、契约、认证、Gateway）"
+    (cd "${WORKSPACE_DIR}" && mvn -q -o clean install -DskipTests) \
+        || fail "工作区构建失败（${WORKSPACE_DIR}）"
     info "构建完成"
 }
 
