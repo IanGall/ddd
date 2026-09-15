@@ -218,7 +218,7 @@ PLATFORMS=linux/amd64 bash ian-ddd-gateway/gateway-app/build.sh
 IMAGE=<可推送的仓库>/ian-ddd-gateway PLATFORMS=linux/amd64,linux/arm64 bash ian-ddd-gateway/gateway-app/build.sh
 ```
 
-基础镜像是 `eclipse-temurin:21-jre-alpine`（官方 manifest list 自带 amd64/arm64），Dockerfile 无架构相关指令，
+基础镜像是 `eclipse-temurin:21-jre`（官方 manifest list 自带 amd64/arm64），Dockerfile 无架构相关指令，
 因此同一份 Dockerfile 即可出双架构镜像；混架构集群必须用最后一种推多架构镜像。
 
 - 网关是唯一对外入口：Service 为 ClusterIP，对外经 `ingress.yaml`（`ingressClassName: apisix`，host 为占位）。
