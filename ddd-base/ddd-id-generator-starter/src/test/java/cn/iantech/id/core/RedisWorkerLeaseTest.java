@@ -212,6 +212,72 @@ class RedisWorkerLeaseTest {
     }
 
     @Test
+    void shouldReacquireSameWorkerIdWhenLeaseKeyDisappears() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList()))
+                .thenReturn(3L, 0L, 1L);
+        RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
+        nanoTime.set(Duration.ofMillis(200).toNanos());
+        assertThat(lease.isValid()).isFalse();
+
+        lease.renew();
+
+        assertThat(lease.isValid()).isTrue();
+        assertThat(lease.workerId()).isEqualTo(3);
+
+        ArgumentCaptor<String> scriptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(redisService, times(3)).executeLongScript(scriptCaptor.capture(), anyList(), anyList());
+        assertThat(scriptCaptor.getAllValues().get(2))
+                .as("重取租约必须是针对本实例 leaseKey 的原子 SET NX")
+                .contains("redis.call('SET', KEYS[1], owner, 'NX', 'PX', leaseMillis)");
+    }
+
+    @Test
+    void shouldRecoverOnNextRenewalAfterTransientRedisFailure() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList()))
+                .thenReturn(3L)
+                .thenThrow(new IllegalStateException("Redis unavailable"))
+                .thenReturn(1L);
+        RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
+        nanoTime.set(Duration.ofMillis(200).toNanos());
+
+        lease.renew();
+        assertThat(lease.isValid()).isFalse();
+
+        // Redis 恢复后，下一个续租周期必须能够自愈，而不是永久停发
+        nanoTime.set(Duration.ofMillis(230).toNanos());
+        lease.renew();
+
+        assertThat(lease.isValid()).isTrue();
+    }
+
+    @Test
+    void shouldStaySuspendedWhileAnotherInstanceHoldsTheLease() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList()))
+                .thenReturn(3L, 0L, 0L);
+        RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
+        nanoTime.set(Duration.ofMillis(200).toNanos());
+
+        lease.renew();
+
+        assertThat(lease.isValid()).isFalse();
+    }
+
+    @Test
+    void shouldNotRenewAfterClose() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList()))
+                .thenReturn(3L, 1L);
+        RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
+
+        lease.close();
+        nanoTime.set(Duration.ofMillis(200).toNanos());
+        lease.renew();
+
+        assertThat(lease.isValid()).isFalse();
+        // 只应有 acquire 与 release 两次 Redis 调用，关闭后不得再发起续租
+        verify(redisService, times(2)).executeLongScript(anyString(), anyList(), anyList());
+    }
+
+    @Test
     void shouldExpireUsingMonotonicClockAndReleaseOnlyOnce() {
         when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(3L, 1L);
         RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");

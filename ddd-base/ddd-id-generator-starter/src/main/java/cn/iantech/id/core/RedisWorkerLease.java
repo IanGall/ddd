@@ -70,6 +70,27 @@ final class RedisWorkerLease implements AutoCloseable {
             return 0
             """;
 
+    /**
+     * 重新获取自己那个 Worker ID 的租约。
+     *
+     * <p>只对当前实例已经持有的 {@code leaseKey} 做原子 {@code SET NX}：
+     * 键不存在（如 Redis 重启丢失数据）时抢回同一个 Worker ID 并恢复出号；
+     * 键已被其他实例持有时 {@code SET NX} 失败，本实例继续保持停发。
+     *
+     * <p>之所以不去重新扫描整个区间，是因为算法侧的 {@code SnowflakeIdGenerator} 在构造时就绑定了
+     * Worker ID，换一个 ID 需要重建生成器；而拿回原 ID 在语义上也是安全的——其他实例只可能在
+     * 本实例的租约键过期后才能抢到它，而本实例的本地安全窗口严格短于租约 TTL，
+     * 因此本实例早已停发，不存在两个实例同时以同一 Worker ID 出号的窗口。
+     */
+    private static final String REACQUIRE_SCRIPT = """
+            local owner = ARGV[1]
+            local leaseMillis = tonumber(ARGV[2])
+            if redis.call('SET', KEYS[1], owner, 'NX', 'PX', leaseMillis) then
+                return 1
+            end
+            return 0
+            """;
+
     private static final String RELEASE_SCRIPT = """
             local owner = ARGV[1]
             if redis.call('GET', KEYS[1]) == owner then
@@ -86,6 +107,7 @@ final class RedisWorkerLease implements AutoCloseable {
     private final long leaseMillis;
     private final LongSupplier nanoTime;
     private final AtomicLong validUntilNanos = new AtomicLong();
+    /** 是否持有有效租约。续租失败时置 false（停发），续租或重取成功后恢复 true。 */
     private final AtomicBoolean active = new AtomicBoolean(true);
     private final AtomicBoolean closed = new AtomicBoolean();
     private final int workerId;
@@ -176,26 +198,38 @@ final class RedisWorkerLease implements AutoCloseable {
         return active.get() && !closed.get() && nanoTime.getAsLong() - validUntilNanos.get() < 0;
     }
 
+    /**
+     * 续租一次。失败时立即停发，但**不**永久放弃：下一个续租周期会再次尝试，
+     * 因此 Redis 重启、网络抖动等临时故障恢复后能自动回到可用状态。
+     */
     void renew() {
-        if (closed.get() || !active.get()) {
+        if (closed.get()) {
             return;
         }
         long requestStartedNanos = nanoTime.getAsLong();
         try {
-            Long renewed = redisService.executeLongScript(
-                    RENEW_SCRIPT,
-                    List.of(leaseKey),
-                    List.of(ownerToken, leaseMillis));
-            if (Long.valueOf(RENEW_SUCCESS).equals(renewed)) {
-                extendLocalSafetyPeriod(requestStartedNanos);
-            } else {
-                invalidate();
+            if (Long.valueOf(RENEW_SUCCESS).equals(
+                    redisService.executeLongScript(RENEW_SCRIPT, List.of(leaseKey),
+                            List.of(ownerToken, leaseMillis)))) {
+                resume(requestStartedNanos);
+                return;
             }
+            // 续租被拒：租约键已不存在（Redis 丢数据）或已归属其他实例。
+            if (Long.valueOf(RENEW_SUCCESS).equals(
+                    redisService.executeLongScript(REACQUIRE_SCRIPT, List.of(leaseKey),
+                            List.of(ownerToken, leaseMillis)))) {
+                log.warn("Worker ID 租约键丢失后已重新获取，恢复出号: leaseKey={}, workerId={}",
+                        leaseKey, workerId);
+                resume(requestStartedNanos);
+                return;
+            }
+            log.warn("Worker ID 租约已归属其他实例，保持停发: leaseKey={}, workerId={}",
+                    leaseKey, workerId);
         } catch (RuntimeException exception) {
-            // 严格停发：无法确认租约仍归属当前实例时立即失效。
-            log.warn("Worker ID 租约续租失败，立即停发 ID: leaseKey={}", leaseKey, exception);
-            invalidate();
+            // 严格停发：无法确认租约仍归属当前实例时立即停发，等待下一个续租周期重试。
+            log.warn("Worker ID 租约续租失败，暂停出号: leaseKey={}", leaseKey, exception);
         }
+        suspend();
     }
 
     @Override
@@ -203,7 +237,7 @@ final class RedisWorkerLease implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        invalidate();
+        suspend();
         try {
             redisService.executeLongScript(
                     RELEASE_SCRIPT,
@@ -224,7 +258,14 @@ final class RedisWorkerLease implements AutoCloseable {
         validUntilNanos.set(saturatedAdd(requestStartedNanos, localSafetyNanos));
     }
 
-    private void invalidate() {
+    /** 确认持有租约，恢复出号能力。 */
+    private void resume(long requestStartedNanos) {
+        active.set(true);
+        extendLocalSafetyPeriod(requestStartedNanos);
+    }
+
+    /** 停发但保留重试机会：下一个续租周期仍会尝试续租或重取租约。 */
+    private void suspend() {
         active.set(false);
         validUntilNanos.set(0L);
     }
