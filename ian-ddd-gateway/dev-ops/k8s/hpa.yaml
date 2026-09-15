@@ -1,0 +1,41 @@
+# 网关卡水平扩缩容。
+#
+# 网关是无状态进程（不持有会话、数据库、Redis，也没有 Kafka 消费组与 ID 生成器租约），因此可以比认证服务更激进地伸缩，
+# 且伸缩代价低。缩容稳定窗取 150s，抑制流量毛刺引起的抖动。
+#
+# 注意：本机 OrbStack 集群没有 metrics-server，HPA 会一直显示 <unknown> 且不会伸缩；
+# 生产集群需自行确认 metrics-server 已就绪。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ian-ddd-gateway
+  labels:
+    app.kubernetes.io/name: ian-ddd-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ian-ddd-gateway
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    # Utilization 口径 = 实际用量 / requests，因此 Deployment 必须设置 requests.cpu，否则指标为 unknown
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 150
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

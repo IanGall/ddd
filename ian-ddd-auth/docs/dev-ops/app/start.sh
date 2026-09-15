@@ -7,7 +7,10 @@
 #
 # 用法：
 #   bash docs/dev-ops/app/start.sh
-#   IMAGE_NAME=system/ian-ddd-auth:v1 PORT=8091 bash docs/dev-ops/app/start.sh
+#   IMAGE_NAME=system/ian-ddd-auth-boot:v1 PORT=20880 bash docs/dev-ops/app/start.sh
+#
+# 端口说明：认证服务运行期只有 Dubbo Provider，没有 servlet 容器，
+# application.yml 的 server.port: 8091 从不被监听，因此这里映射的是 Dubbo 端口。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,8 +18,8 @@ MODULE_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"    # ian-ddd-auth
 REPO_DIR="$(cd "${MODULE_DIR}/.." && pwd)"            # 仓库根（ddd）
 
 CONTAINER_NAME="${CONTAINER_NAME:-ian-ddd-auth}"
-IMAGE_NAME="${IMAGE_NAME:-system/ian-ddd-auth:latest}"
-PORT="${PORT:-8091}"
+IMAGE_NAME="${IMAGE_NAME:-system/ian-ddd-auth-boot:latest}"
+PORT="${PORT:-20880}"
 ENV_FILE="${ENV_FILE:-${REPO_DIR}/.env.local}"
 
 echo "容器部署开始 ${CONTAINER_NAME}（镜像 ${IMAGE_NAME}，端口 ${PORT}）"

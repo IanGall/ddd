@@ -24,3 +24,6 @@
 - 评估远程调用次数，避免出现明显 N+1 或重复调用问题。
 - 删除未使用的控制器代码、无效配置与过期注释。
 - 执行根聚合工程 `mvn clean verify`，确保参考应用和骨架生成工程同时通过。
+- 改动 `dev-ops/k8s/**` 后跑一次 `kubectl apply --dry-run=server -n <ns> -f dev-ops/k8s/`；禁止把真实凭证入库（只留 `secret.yaml.example`）。
+- Ingress 只做透传：禁止在 `ingress.yaml` 里复制 `GatewayAuthFilter` 的路径白名单或加路径级鉴权，否则会出现第二份真相。
+- 保持网关无状态（不持有 Session / 不连 Auth Redis / 无本地缓存）——这是 Deployment 可水平伸缩与 HPA 能激进扩缩的前提。

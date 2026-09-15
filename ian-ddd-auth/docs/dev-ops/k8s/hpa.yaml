@@ -1,0 +1,42 @@
+# 认证服务水平扩缩容。
+#
+# 扩容硬上限来自应用约束：application.yml 的 ddd.id-generator.worker-id-block-size=64，
+# 即「每个业务的副本数不得超过该值」，超限时 ID 生成器拿不到 Worker ID 租约、启动直接失败。
+# 这里取 8，并为缩容留 300s 稳定窗：频繁伸缩会让每个副本反复续租 / 反注册，代价高于收益。
+#
+# 注意：本机 OrbStack 集群没有 metrics-server，HPA 会一直显示 <unknown> 且不会伸缩；
+# 生产集群需自行确认 metrics-server 已就绪。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ian-ddd-auth
+  labels:
+    app.kubernetes.io/name: ian-ddd-auth
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ian-ddd-auth
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    # Utilization 口径 = 实际用量 / requests，因此 Deployment 必须设置 requests.cpu，否则指标为 unknown
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

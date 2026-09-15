@@ -20,3 +20,6 @@
 - 确认变更不引入循环依赖或明显构建风险。
 - 检查 Domain 未引入 Cases、上下文、Servlet、Dubbo 或基础设施实现；Spring `@Service` 仅允许用于领域服务实现和 `cases` 服务。
 - Domain 对基础设施的能力契约统一放在 `domain.<业务域>.infra`，不得保留 `port`、`repository` 或 `adapter` 契约包。
+- 改动 `docs/dev-ops/k8s/**` 后跑一次 `kubectl apply --dry-run=server -n <ns> -f docs/dev-ops/k8s/`；新增 `docs/dev-ops/` 子目录必须同步补 `.gitignore` 的 `!` 白名单，否则文件会被静默忽略。
+- 禁止把任何真实凭证写入仓库：Secret 只保留 `secret.yaml.example`，真实值用 `kubectl create secret` 命令式创建。
+- 探针与端口映射一律指向 Dubbo 20880；认证服务没有 servlet 容器，按 8091 配置会让 Pod 进入 CrashLoopBackOff。

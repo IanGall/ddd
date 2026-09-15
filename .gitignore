@@ -9,3 +9,6 @@
 
 # 本地开发环境变量（含真实凭证，禁止入库）；模板见 .env.example
 .env.local
+
+# k8s 真实 Secret 禁止入库：各服务只提交 secret.yaml.example，真实值用 kubectl create secret 创建
+**/k8s/secret.yaml

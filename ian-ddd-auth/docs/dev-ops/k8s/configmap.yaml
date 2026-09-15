@@ -1,0 +1,65 @@
+# 认证服务的非敏感配置。
+#
+# 键名与 application-prod.yml / application.yml / sharding/sharding-jdbc-prod.yaml 里的 ${...} 引用一一对应，
+# 敏感项一律在 ian-ddd-auth-secret（见 secret.yaml.example），不要在这里重复声明。
+# TZ 由 Dockerfile 固定，不在此处覆盖。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ian-ddd-auth-config
+  labels:
+    app.kubernetes.io/name: ian-ddd-auth
+data:
+  # ---------------- 部署环境（唯一的 profile 开关） ----------------
+  # 容器 env 优先级高于镜像里的 ENV（Dockerfile 固定 prod），改这一项即可切换环境：
+  #   prod：默认值，走 application-prod.yml + sharding-jdbc-prod.yaml（库地址全部来自环境变量）
+  #   dev ：改 "dev"，允许使用本地开发密钥/令牌（SecretConfigurationValidator 对本地 profile 放行）；但 dev 的
+  #         分片配置 sharding-jdbc-dev.yaml 把库地址写死为 127.0.0.1，集群内必须再注入
+  #         SPRING_DATASOURCE_URL=jdbc:shardingsphere:classpath:sharding/sharding-jdbc-prod.yaml?placeholder-type=environment
+  #         否则连不上集群里的 MySQL。完整步骤见同目录 README.md 的「切换部署环境（prod / dev）」。
+  SPRING_PROFILES_ACTIVE: "prod"
+
+  # ---------------- Dubbo / 注册中心 ----------------
+  # QoS 端口固定 22222，多副本落在同一节点会端口冲突；它也不是优雅下线的手段（下线靠 SIGTERM + Nacos 反注册）
+  DUBBO_QOS_ENABLED: "false"
+  # 显式写死，与 Deployment 的 containerPort / 探针 / Service 保持一致
+  DUBBO_PROTOCOL_PORT: "20880"
+  DUBBO_REGISTRY_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848"
+  DUBBO_REGISTRY_USERNAME: "nacos"
+  # Nacos 2.x 客户端还需要 gRPC 端口 9848（= 8848+1000），若加 NetworkPolicy 必须一并放行
+
+  # ---------------- Redis（会话、风控计数、ID 生成器租约） ----------------
+  REDIS_HOST: "redis.infra.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DATABASE: "0"
+  # 所有实例必须连同一个 Redis 且共享该命名空间，否则全局 ID 会撞号；多环境也不要用不同值
+  DDD_ID_GENERATOR_NAMESPACE: "ddd-global-id"
+
+  # ---------------- MySQL（ShardingSphere 按环境变量渲染分片配置） ----------------
+  # sharding-jdbc-prod.yaml 用 $${VAR} 占位符 + JDBC URL 的 placeholder-type=environment 渲染，
+  # 因此这些键必须真正作为容器环境变量存在（不要改成挂载 yml 文件），且双 $ 是 ShardingSphere 语法、不要改成单 $
+  MYSQL_HOST: "mysql.infra.svc.cluster.local"
+  MYSQL_PORT: "3306"
+  MYSQL_DATABASE_00: "ian_prod_tech_db_00"
+  MYSQL_DATABASE_01: "ian_prod_tech_db_01"
+  MYSQL_DATABASE_RBAC: "ddd_rbac"
+  MYSQL_USERNAME: "ian_app"
+
+  # ---------------- Kafka ----------------
+  KAFKA_ENABLED: "true"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.infra.svc.cluster.local:9092"
+  KAFKA_CONSUMER_GROUP: "ian-group"
+  KAFKA_TOPIC: "ian-mq"
+
+  # ---------------- 渠道密钥标识 ----------------
+  # 与 Secret 里的 CHANNEL_ENCRYPTION_MASTER_KEY 配对；轮换时先改标识再换主密钥
+  CHANNEL_ENCRYPTION_KEY_ID: "prod-key-v1"
+
+  # ---------------- 会话有效期（秒） ----------------
+  AUTH_ACCESS_TOKEN_TIMEOUT: "9000"
+  AUTH_REFRESH_TOKEN_TIMEOUT: "2592000"
+
+  # ---------------- XXL-Job ----------------
+  # 关闭时不创建执行器 Bean，XXL_JOB_ADMIN_ADDRESSES / XXL_JOB_ACCESS_TOKEN 都不需要解析。
+  # 若要启用：把此项改为 "true"，并补 XXL_JOB_ADMIN_ADDRESSES（本 ConfigMap）与 XXL_JOB_ACCESS_TOKEN（Secret）。
+  XXL_JOB_ENABLED: "false"

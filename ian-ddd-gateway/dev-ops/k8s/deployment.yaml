@@ -1,0 +1,129 @@
+# 网关（公网入口）k8s 部署清单。
+#
+# 前置：镜像已构建 —— 本模块没有 build.sh，在仓库根执行：
+#   docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
+# 凭证：注册中心口令不在清单里，先用 kubectl create secret 创建 ian-ddd-gateway-secret（见同目录 README.md）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ian-ddd-gateway
+  labels:
+    app.kubernetes.io/name: ian-ddd-gateway
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      # 与 PDB minAvailable=1 配合：先起新副本、ready 后再摘旧副本
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ian-ddd-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ian-ddd-gateway
+    spec:
+      # preStop(5s) + Spring 优雅停机(20s) + 余量
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          # 尽量把副本分散到不同节点；单节点集群下只是尽力而为，不阻塞调度
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: ian-ddd-gateway
+      containers:
+        - name: gateway
+          image: system/ian-ddd-gateway:1.0-SNAPSHOT
+          # SNAPSHOT 是可移动 tag：生产请改为不可变 tag 或 digest，否则节点可能一直用旧镜像
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8092
+              protocol: TCP
+          envFrom:
+            # 顺序有意义：同名键以后者为准，因此 Secret 必须在 ConfigMap 之后
+            - configMapRef:
+                name: ian-ddd-gateway-config
+            - secretRef:
+                name: ian-ddd-gateway-secret
+          env:
+            - name: JAVA_OPTS
+              # 这里会整体覆盖镜像 Dockerfile 的默认值，因此必须把默认的两个参数重复写全。
+              # server.shutdown=graceful 让 Tomcat 先停止接收新请求再退出，配合 pod 的 preStop 完成无损下线。
+              # -Duser.home=/tmp 是必需的：容器以无 passwd 条目的 uid 运行，user.home 为空串，
+              # Dubbo 元数据缓存会写 /.dubbo、Nacos 客户端日志会写 /logs/nacos，只读根文件系统下直接启动失败。
+              value: >-
+                -XX:MaxRAMPercentage=75.0
+                -XX:+UseG1GC
+                -XX:+ExitOnOutOfMemoryError
+                -Dserver.shutdown=graceful
+                -Dspring.lifecycle.timeout-per-shutdown-phase=20s
+                -Duser.home=/tmp
+                -Ddubbo.registry.file=/tmp/dubbo-registry.cache
+          resources:
+            requests:
+              cpu: "200m"
+              memory: 512Mi
+            limits:
+              cpu: "1000m"
+              memory: 1024Mi
+          # 网关注册了 actuator 且只暴露 health（见 application.yml 的 management.endpoints），health 为 UP 即代表
+          # HTTP 端口已就绪；网关不持有数据源，因此不会出现「端口通了但依赖没通」的假就绪。
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # 等 Endpoints 摘除传播完再发 SIGTERM，避免滚动更新期间仍有请求打到即将退出的 Pod
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # WORKDIR /app（见 Dockerfile），logback 按相对路径写 ./data/log
+            - name: logs
+              mountPath: /app/data
+            # Dubbo 默认往 ${user.home}/.dubbo 写注册中心缓存，只读根文件系统下会反复告警
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # emptyDir 随 Pod 销毁，仅用于让日志/临时文件可写；日志采集请走容器 stdout
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

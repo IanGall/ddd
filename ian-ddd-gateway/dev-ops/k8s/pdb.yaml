@@ -1,0 +1,16 @@
+# 网关的中断预算：节点排空 / 集群维护时至少保留 1 个可用副本（网关是唯一入口，不能整批下线）。
+#
+# 只约束「自愿中断」（kubectl drain、节点维护），不阻止节点故障导致的非自愿中断。
+# 只用 minAvailable 不用 maxUnavailable：两者互斥不能同写；用绝对值 1 而不是百分比，
+# 因为 HPA 缩到 2 副本时 50% 只剩 1，再缩就失去保护。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ian-ddd-gateway
+  labels:
+    app.kubernetes.io/name: ian-ddd-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ian-ddd-gateway

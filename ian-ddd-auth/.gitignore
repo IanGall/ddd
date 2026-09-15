@@ -40,6 +40,10 @@ build/
 !/docs/dev-ops/environment/
 !/docs/dev-ops/environment/**
 !/docs/dev-ops/start-with-coverage.sh
+!/docs/dev-ops/k8s/
+!/docs/dev-ops/k8s/**
+# k8s 清单随仓库分发，但真实 Secret 禁止入库（只留 secret.yaml.example）
+docs/dev-ops/k8s/secret.yaml
 ian-ddd-auth-boot/data/**
 
 /.idea/**

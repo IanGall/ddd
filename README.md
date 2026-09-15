@@ -178,6 +178,26 @@ E2E 并集行覆盖率目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可
 门槛定义位置、报告产物与接入新服务的方式见
 [ddd-base/ian-ddd-coverage/README.md](ddd-base/ian-ddd-coverage/README.md)。
 
+## 部署到 Kubernetes
+
+两个可部署服务各自在模块内维护 k8s 清单（原生 YAML，`kubectl apply -f` 直接使用，不需要 Helm/Kustomize），权威说明在各自的
+`k8s/README.md`：
+
+| 服务 | 清单位置 | 入口 | 探针 |
+|------|----------|------|------|
+| 认证服务 `ian-ddd-auth` | [`ian-ddd-auth/docs/dev-ops/k8s/`](ian-ddd-auth/docs/dev-ops/k8s/README.md) | 仅集群内（被网关以 Dubbo 调用） | TCP 20880 |
+| 网关 `ian-ddd-gateway` | [`ian-ddd-gateway/dev-ops/k8s/`](ian-ddd-gateway/dev-ops/k8s/README.md) | ClusterIP + Ingress | HTTP `/actuator/health` |
+
+每个目录包含 Deployment / Service / ConfigMap / `secret.yaml.example` / HPA / PDB（网关另有 Ingress），部署顺序为
+**ConfigMap → Deployment → Service(/Ingress) → HPA → PDB**，凭证先在集群外用 `kubectl create secret generic ... --from-env-file`
+创建（仓库是公开仓，真实凭证一律不入库）。
+
+两点容易踩的事实：
+
+- **认证服务没有 HTTP 端口**：`spring-boot-starter-web` 仅在 `-Phttp` 下引入且默认不激活，`application.yml` 的
+  `server.port: 8091` 从不被监听；探针与端口映射都必须指向 Dubbo 20880，按 8091 配置会让 Pod 进入 CrashLoopBackOff。
+- **本机 OrbStack 集群没有 metrics-server**：HPA 对象能被创建但不会伸缩，`kubectl apply --dry-run=server` 只能校验 schema。
+
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 在 push 任意分支与 PR 时触发：JDK 21（temurin）下执行

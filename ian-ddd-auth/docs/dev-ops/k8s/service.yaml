@@ -1,0 +1,20 @@
+# 认证服务只在集群内被网关以 Dubbo 调用，不对外暴露。
+#
+# 这个 Service 不是 Dubbo 的数据面：consumer 从 Nacos 拿到的实例地址是 podIP:20880，直连 Pod。
+# 它只是运维入口（例如 kubectl port-forward svc/ian-ddd-auth 20880:20880）。
+# 刻意保持普通 ClusterIP，不设 clusterIP: None —— 服务发现由 Nacos 承担，再加一层 DNS 发现只会产生双份真相。
+apiVersion: v1
+kind: Service
+metadata:
+  name: ian-ddd-auth
+  labels:
+    app.kubernetes.io/name: ian-ddd-auth
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ian-ddd-auth
+  ports:
+    - name: dubbo
+      port: 20880
+      targetPort: dubbo
+      protocol: TCP

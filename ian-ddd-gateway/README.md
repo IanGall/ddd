@@ -203,6 +203,24 @@ C 端注册登录、渠道凭证管理与异常语义。
 
 未设置 `RUN_COVERAGE_E2E=true` 时该测试自动跳过，常规构建与 CI 不受影响。
 
+## 容器化部署（Kubernetes）
+
+k8s 清单位于 `ian-ddd-gateway/dev-ops/k8s/`（原生 YAML：Deployment / Service / ConfigMap / Secret 示例 / HPA / PDB / Ingress），
+操作步骤、凭证创建方式与已知限制见该目录的 `README.md`。
+
+网关模块没有 `build.sh`，镜像直接在仓库根构建：
+
+```bash
+docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT \
+  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
+```
+
+- 网关是唯一对外入口：Service 为 ClusterIP，对外经 `ingress.yaml`（`ingressClassName: apisix`，host 为占位）。
+- Ingress 只做全量路径透传，**不复制路径白名单**：白名单的唯一真相在 `GatewayAuthFilter`，重复一份就会出现第二份真相。
+- 探针用 `GET /actuator/health`（actuator 仅暴露 health），网关不持有数据源，health 为 UP 即代表真正可服务。
+- 客户端 IP 目前取连接地址（`getRemoteAddr()`）；`server.forward-headers-strategy` 按既有结论不开启，原因与后续做法见
+  `dev-ops/k8s/README.md` 的「客户端 IP」一节。
+
 ## 通用网关骨架
 
 通用网关骨架已独立到 `ddd-scaffold` 仓库的 `scaffold-gateway` 模块。骨架包含 Web 接入、Auth RPC 认证、参数校验、统一异常、

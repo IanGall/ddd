@@ -1,4 +1,4 @@
-# ian-frame-archetype - DDD 脚手架
+# ian-ddd-auth - 认证服务
 
 ## 重要信息
 
@@ -116,6 +116,19 @@ mvn -q spring-boot:run -pl ian-ddd-auth-boot -Pdev
 - 调用本地平台开户接口时使用 `X-Platform-Token`（值取自 `.env.local` 的 `PLATFORM_ADMIN_TOKEN`）。
 - 生产环境不使用 `.env.local`：由部署平台注入同名环境变量，`SPRING_PROFILES_ACTIVE=prod` 已由 Dockerfile 固定；
   非本地 Profile 使用示例令牌或全零渠道密钥会被启动校验（`SecretConfigurationValidator`）直接拒绝。
+
+## 容器化部署（Kubernetes）
+
+k8s 清单位于 `ian-ddd-auth/docs/dev-ops/k8s/`（原生 YAML：Deployment / Service / ConfigMap / Secret 示例 / HPA / PDB），
+操作步骤、凭证创建方式与已知限制见该目录的 `README.md`。
+
+- 镜像：在 `ian-ddd-auth-boot` 下执行 `bash build.sh` → `system/ian-ddd-auth-boot:1.0-SNAPSHOT`，
+  `SPRING_PROFILES_ACTIVE=prod` 与 `TZ` 由 Dockerfile 固定，配置项全部由 ConfigMap / Secret 注入。
+- **认证服务不暴露 HTTP**：`spring-boot-starter-web` 只在 `-Phttp` 下引入且默认不激活，`application.yml` 的
+  `server.port: 8091` 从不被监听；k8s 探针与 Service 都指向 Dubbo 20880，不要按 8091 配探针或端口映射。
+- Dubbo 由 Nacos 完成发现：Provider 注册 podIP:20880，网关直连，不需要 `DUBBO_IP_TO_REGISTER`，也不需要 headless Service。
+- 副本上限：`ddd.id-generator.worker-id-block-size=64` 要求每个业务的副本数不超过该值，HPA 上限取 8。
+- `docs/dev-ops/**` 在 `.gitignore` 中按目录白名单放行，新增子目录需同步补 `!` 规则；真实 Secret 只允许以命令式创建，不入库。
 
 ## 覆盖率
 

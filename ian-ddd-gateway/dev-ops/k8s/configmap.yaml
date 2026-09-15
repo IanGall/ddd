@@ -1,0 +1,20 @@
+# 网关的非敏感配置。
+#
+# 键名与 application-prod.yml 的 ${...} 引用一一对应。网关不连接任何数据源（认证会话与 RBAC 都在认证服务侧），
+# 因此这里只有注册中心相关项，不要复制认证服务的 MySQL / Redis / Kafka 键。
+# TZ 由 Dockerfile 固定，不在此处覆盖。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ian-ddd-gateway-config
+  labels:
+    app.kubernetes.io/name: ian-ddd-gateway
+data:
+  # ---------------- 部署环境（唯一的 profile 开关） ----------------
+  # 容器 env 优先级高于镜像里的 ENV（Dockerfile 固定 prod），改这一项即可切换环境。
+  # 网关的 dev 与 prod 使用同一组键名（DUBBO_REGISTRY_*），因此切到 "dev" 只需改这一个值。
+  SPRING_PROFILES_ACTIVE: "prod"
+
+  DUBBO_REGISTRY_ADDRESS: "nacos://nacos.infra.svc.cluster.local:8848"
+  DUBBO_REGISTRY_USERNAME: "nacos"
+  # Nacos 2.x 客户端还需要 gRPC 端口 9848（= 8848+1000），若加 NetworkPolicy 必须一并放行
