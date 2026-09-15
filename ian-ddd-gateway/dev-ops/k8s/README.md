@@ -22,6 +22,20 @@ docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT \
   -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
 ```
 
+镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
+架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**：
+
+```bash
+docker buildx create --name multiarch --driver docker-container --bootstrap --use   # 首次需要
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t <可推送的仓库>/ian-ddd-gateway:1.0-SNAPSHOT \
+  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app --push
+```
+
+（多平台镜像无法 `--load` 到本地，必须推送；只出一套架构时用 `docker buildx build --platform linux/amd64 --load`。）
+注意 alpine 与 Ubuntu 基础镜像的两处差异：`apt-get` 要换成 `apk`，且**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
+`/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）。
+
 镜像内已固定 `SPRING_PROFILES_ACTIVE=prod` 与 `TZ=Asia/Shanghai`；`application-prod.yml` 要求的注册中心地址与凭证必须由
 ConfigMap / Secret 注入。
 

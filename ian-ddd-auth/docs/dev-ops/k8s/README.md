@@ -17,8 +17,23 @@
 以下命令默认在**仓库根**（`ddd`）执行。
 
 ```bash
-bash ian-ddd-auth/ian-ddd-auth-boot/build.sh        # system/ian-ddd-auth-boot:1.0-SNAPSHOT
+bash ian-ddd-auth/ian-ddd-auth-boot/build.sh        # system/ian-ddd-auth-boot:1.0-SNAPSHOT（本机架构）
 ```
+
+镜像基于 `eclipse-temurin:21-jre-alpine`（官方 manifest list 同时提供 `linux/amd64` 与 `linux/arm64`），Dockerfile 里没有任何
+架构相关指令，**同一份 Dockerfile 可直接出双架构镜像**：
+
+```bash
+# 双架构：多平台镜像无法 --load 到本地，必须推到镜像仓库（arm64 机型上构建 amd64 会走 QEMU/Rosetta 仿真，较慢）
+docker buildx create --name multiarch --driver docker-container --bootstrap --use   # 首次需要
+IMAGE=<可推送的仓库>/ian-ddd-auth-boot PLATFORMS=linux/amd64,linux/arm64 \
+  bash ian-ddd-auth/ian-ddd-auth-boot/build.sh
+```
+
+注意 alpine 与 Ubuntu 基础镜像的三处差异：`apt-get` 要换成 `apk`；**必须显式装 `tzdata`**（alpine 不带时区库，缺了它
+`/etc/localtime` 软链会指向不存在的文件、时间静默退回 UTC）；alpine 用的是 **musl libc**，其 DNS 解析器在「响应超过 512 字节 /
+搜索域很多」时比 glibc 脆弱，而 k8s 的 `ndots:5` + 多搜索域正是这种场景——本仓库的服务都按 FQDN
+（`xxx.infra.svc.cluster.local`）访问中间件，实测正常，但若将来出现解析抖动，这是第一个要查的点。
 
 镜像内已固定 `SPRING_PROFILES_ACTIVE=prod` 与 `TZ=Asia/Shanghai`，因此 `application-prod.yml` 要求的所有中间件地址与凭证**必须**由
 ConfigMap / Secret 注入；缺任何一项都会以配置错误启动失败（刻意不给可用默认值）。

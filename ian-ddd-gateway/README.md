@@ -211,9 +211,18 @@ k8s 清单位于 `ian-ddd-gateway/dev-ops/k8s/`（原生 YAML：Deployment / Ser
 网关模块没有 `build.sh`，镜像直接在仓库根构建：
 
 ```bash
+# 本机架构
 docker build -t system/ian-ddd-gateway:1.0-SNAPSHOT \
   -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app
+
+# amd64 + arm64 双架构（多平台镜像无法 --load，必须推到镜像仓库）
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t <可推送的仓库>/ian-ddd-gateway:1.0-SNAPSHOT \
+  -f ian-ddd-gateway/gateway-app/Dockerfile ian-ddd-gateway/gateway-app --push
 ```
+
+基础镜像是 `eclipse-temurin:21-jre-alpine`（官方 manifest list 自带 amd64/arm64），Dockerfile 无架构相关指令，
+因此同一份 Dockerfile 即可出双架构镜像。
 
 - 网关是唯一对外入口：Service 为 ClusterIP，对外经 `ingress.yaml`（`ingressClassName: apisix`，host 为占位）。
 - Ingress 只做全量路径透传，**不复制路径白名单**：白名单的唯一真相在 `GatewayAuthFilter`，重复一份就会出现第二份真相。
