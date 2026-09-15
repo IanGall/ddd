@@ -83,6 +83,21 @@ curl -X POST http://127.0.0.1:8092/api/app/auth/register \
 或业务请求头。注销和设备会话接口也分别位于两端的 `/auth/**` 子路径；C 端不建立逐用户 RBAC，最终授权由业务服务按可信
 `customerId`、资源归属和有效绑定完成。
 
+**标识字段以字符串出网**：所有标识类字段（属性名等于 `id`，或以 `Id` / `Ids` 结尾，如 `accountId` / `userId` / `roleIds` /
+`parentId`）在响应中一律是 **JSON 字符串**，例如 `"id":"869643386981388293"`。非标识数值（`total` / `pageNum` /
+`expiresIn` / `permType` / `secretVersion` 等）仍是 JSON number。
+
+> 原因是 JSON 没有 int64：雪花 ID 约 8.7e17，超过 JavaScript 的 `Number.MAX_SAFE_INTEGER`（2^53）。以 number 出网时浏览器
+> `JSON.parse` 会改写其低位（实测 `869643386981388293` 被读成 `869643386981388300`），前端再把被改写的 ID 回传，网关侧就
+> 查不到对应记录（表现为 400「用户不存在」或 404）。
+>
+> **客户端义务**：标识必须**按字符串原样保存与回传**，不得做 `Number()` / `parseInt()` / 算术运算。请求侧仍可提交字符串，
+> 服务端按 `Long` 接收（Jackson 会把字符串反序列化成数值，`@PathVariable` 由 Spring 转换），因此内部 Dubbo 契约与控制器
+> 签名均未改动。
+
+实现位于 `gateway-core` 的 `IdentifierAsStringModule`（由 `GatewayCoreAutoConfiguration` 以 `JsonMapperBuilderCustomizer`
+注册）；命中规则按属性名判定，新增标识字段沿用 `xxxId` 命名即可自动生效。
+
 **管理端权限码获取（`GET /api/admin/auth/permissions`）**：返回当前主体的有效权限码数组（去重、升序），供管理端渲染菜单与
 按钮。**主账号**返回其账号内**全部**权限码（含账号内自定义权限，**不过滤权限状态**），**子账号**返回角色聚合结果（停用或
 软删除的用户/角色/权限会被排除）；每次调用实时读库，因此撤销角色/权限或停用账号、用户对下一次调用即时生效。

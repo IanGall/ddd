@@ -4,6 +4,7 @@ import cn.iantech.gateway.core.exception.GatewayExceptionHandler;
 import cn.iantech.gateway.core.service.GatewayAuthClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
@@ -36,5 +37,15 @@ public class GatewayCoreAutoConfiguration {
     @Bean
     public GatewayExceptionHandler gatewayExceptionHandler() {
         return new GatewayExceptionHandler();
+    }
+
+    /**
+     * 把标识类字段按字符串出网，避免雪花 ID 超过 JavaScript 安全整数后在浏览器端被改写。
+     *
+     * <p>只改序列化方向，入参与控制器签名保持不变，详见 {@link IdentifierAsStringModule}。</p>
+     */
+    @Bean
+    public JsonMapperBuilderCustomizer gatewayIdentifierAsStringCustomizer() {
+        return builder -> builder.addModule(new IdentifierAsStringModule());
     }
 }
