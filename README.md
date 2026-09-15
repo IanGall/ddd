@@ -105,6 +105,21 @@ mvn -B -f ian-ddd-auth/pom.xml clean verify
 | `channel-credential.sql`               | 渠道凭证数据                     |
 | `xxl_job.sql`                          | XXL-Job 调度库                   |
 
+> **导入这些脚本必须显式指定 `--default-character-set=utf8mb4`**：
+>
+> ```bash
+> mysql --default-character-set=utf8mb4 -h 127.0.0.1 -u root -p ddd_rbac < rbac.sql
+> ```
+>
+> 脚本文件本身是 UTF-8，但 `mysql` 客户端会用它**自己声明的连接字符集**去解释文件字节。若客户端跑在 latin1 下，
+> 文件里的 UTF-8 字节（如「查看」= `E6 9F A5 E7 9C 8B`）会被当成 latin1 字符（`æŸ¥çœ‹`）再转存为 utf8mb4，
+> 落库就变成**双重编码**的乱码（`C3A6C5B8C2A5…`，26 字节而不是 12 字节）。这种数据应用层无法自行纠正，
+> 页面上的中文会显示成 `å` ê™...` 之类。2026-09-15 曾因一次备份恢复踩到这个坑（`ddd_rbac` 的 1 条账号 + 21 条权限名），
+> 已用 `CONVERT(CAST(CONVERT(col USING latin1) AS BINARY) USING utf8mb4)` 修复。
+>
+> 通过接口开户（`POST /api/admin/platform/accounts`）不受影响：那条路径的权限名来自 `RbacPermissionCode`（Java，UTF-8）
+> 且 JDBC URL 带 `characterEncoding=utf8`，落库是正确的。
+
 认证服务还要求 Redis（会话、登录风控、防重放），连接信息通过 `MYSQL_*`、`REDIS_*`、`DUBBO_REGISTRY_*`
 环境变量注入；本地开发统一放在仓库根 `.env.local`（不入库，模板 `.env.example`，启动脚本会自动加载）。
 
@@ -199,9 +214,9 @@ profile 生成的 ConfigMap）。下面是不用脚本时的手工步骤与清�
 
 | 访问方 | 目标 | 地址 | 说明 |
 | --- | --- | --- | --- |
-| 宿主机 | 网关（唯一入口） | `http://127.0.0.1` + `Host: gateway.example.com` | OrbStack 把 `infra/apisix-gateway` 这个 LoadBalancer 的端口映射到宿主 `127.0.0.1`，Ingress 按 Host 转发到 `ian-ddd-gateway:8092` |
-| 宿主机 | 网关（备用入口） | `http://127.0.0.1:31213` | 同一个 LoadBalancer 的 nodePort，不依赖宿主端口映射 |
-| 宿主机 | 网关（不依赖 apisix） | `kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092` → `http://127.0.0.1:8092` | 换集群或 CI 里用 |
+| 宿主机 | **管理端前端 + 网关（同一 host）** | `http://gateway.example.com` | OrbStack 把 `infra/apisix-gateway` 这个 LoadBalancer 的端口映射到宿主 `127.0.0.1`。同一 host 下按路径分流：`/` → 前端 `ddd-web:80`，`/api` → `ian-ddd-gateway:8092`（同源，浏览器不需要 CORS） |
+| 宿主机 | 网关（备用入口） | `http://127.0.0.1:31213` + `Host: gateway.example.com` | 同一个 LoadBalancer 的 nodePort，不依赖宿主端口映射 |
+| 宿主机 | 网关（不依赖 apisix） | `kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092` → `http://127.0.0.1:8092` | 换集群或 CI 里用；探活也走这条 |
 | 集群内 | 网关 | `http://ian-ddd-gateway.ian-ddd.svc.cluster.local:8092` | 绕过 Ingress，直接打 Service |
 | 集群内 | 认证服务 | `ian-ddd-auth.ian-ddd.svc.cluster.local:20880`（Dubbo） | **只有 Dubbo，没有 HTTP**；正常路径是网关以 Dubbo 调用它 |
 | 宿主机 | 认证服务（调试） | `kubectl port-forward -n ian-ddd svc/ian-ddd-auth 20880:20880` + Dubbo 直连 | provider 注册的是 podIP，本地直连要用直连模式 |
@@ -209,12 +224,17 @@ profile 生成的 ConfigMap）。下面是不用脚本时的手工步骤与清�
 | 集群内 | infra 中间件 | `<svc>.infra.svc.cluster.local` | 清单里的 `DUBBO_REGISTRY_ADDRESS` / `MYSQL_HOST` 等就是这些地址 |
 
 ```bash
-# 网关健康检查 + 一次业务调用（宿主机的两条入口都试一遍）
-curl -H 'Host: gateway.example.com' http://127.0.0.1/actuator/health
-curl -H 'Host: gateway.example.com' http://127.0.0.1:31213/actuator/health
-curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
+# 一次业务调用（经 Ingress 到网关；用错密码即证明全链路通，401 AUTH_REQUIRED 是预期）
+curl -H 'Content-Type: application/json' \
   -X POST -d '{"loginName":"nobody@1.com","password":"wrong-password"}' \
-  http://127.0.0.1/api/admin/auth/login        # 期望 401 AUTH_REQUIRED（业务错误码 = 全链路通）
+  http://gateway.example.com/api/admin/auth/login
+
+# 前端的 SPA 由同一 host 的 / 提供（路由回退到 index.html，刷新深链不会 404）
+curl -s -o /dev/null -w '%{http_code}\n' http://gateway.example.com/login      # 期望 200
+
+# 探活不在 /api 下，经 Ingress 拿不到，用 port-forward 直连
+kubectl port-forward -n ian-ddd svc/ian-ddd-gateway 8092:8092 &
+curl http://127.0.0.1:8092/actuator/health                                     # 期望 200
 ```
 
 四条要点：
@@ -226,18 +246,38 @@ curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
 - **别用 `192.168.139.2`**（LoadBalancer 的 EXTERNAL-IP）——它在宿主机不可达。
 - **404 先看响应体**：`{"error_msg":"404 Route Not Found"}` 是 **apisix 层**没匹配到 Host（检查 `Host` 头是不是 Ingress 声明过的域名，
   Apifox/Postman 会自动从 URL 生成 `Host`，改过 URL 后要把手动存下来的那条删掉）；`{"code":"NOT_FOUND","info":"请求路径不存在"}`
-  才是网关自己的 404（路径不在白名单）。
+  才是网关自己的 404（路径不在白名单）。注意**只有 `/api/**` 会到达网关**，非 `/api` 路径由前端的 nginx 处理（见下）。
 - **健康检查的边界**：网关 `/actuator/health` UP 只代表网关自身；认证服务 TCP 20880 通也不代表依赖就绪（MySQL 挂掉时它仍是
   `Ready`，业务请求会返回 504 `RPC_TIMEOUT`）。容器内自检：网关镜像有 `curl`，认证镜像只有 `bash`/`nc`
   （`nc -z -w 3 127.0.0.1 20880`，或用 `bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/20880'`）。
 
-两个可部署服务各自在模块内维护 k8s 清单（原生 YAML，`kubectl apply -f` 直接使用，不需要 Helm/Kustomize），权威说明在各自的
+### 管理端前端（ddd-web）
+
+管理端是一个独立仓的 SPA，**与网关共用 `gateway.example.com`**，靠路径分流做到同源：
+
+| 路径 | 归属 | 服务 |
+| --- | --- | --- |
+| `/` | 管理端前端 | `ddd-web`（nginx 托管静态产物，SPA 路由回退到 `index.html`） |
+| `/api` | 网关 | `ian-ddd-gateway:8092`（`/api/admin/**`、`/api/app/**`、`/api/external/**`） |
+
+四条已定的边界（都基于实测，不是推测）：
+
+- **网关的 Ingress 只认领 `/api`**，前端 Ingress 认领 `/`；**两边都不能写 `/`**——同一 host + 同一 path 出现在两个 Ingress 上，
+  命中哪个后端是不确定的。
+- **不需要 CORS**：网关没有任何 CORS 配置，预检 `OPTIONS` 还会被认证白名单过滤器拦成 `401`。靠「同 host 同源」+
+  「开发期 dev-server 代理」解决，**不要**为了前端去给网关加 CORS。
+- **静态资源不要挂到网关上**：网关有路径白名单（只认 `/api/admin|app|external/**`），静态资源由前端自己的 nginx 承载。
+- **前端自己的约束**（开发服务器端口、代理、镜像与清单）由 `ddd-web/README.md` 与 `ddd-web/deploy/README.md` 维护，
+  本仓只记录「网关这一侧」的责任——**同一事实不要在两处各写一份**。
+
+三个可部署服务各自在模块内维护 k8s 清单（原生 YAML，`kubectl apply -f` 直接使用，不需要 Helm/Kustomize），权威说明在各自的
 `k8s/README.md`：
 
 | 服务 | 清单位置 | 入口 | 探针 |
 |------|----------|------|------|
 | 认证服务 `ian-ddd-auth` | [`ian-ddd-auth/docs/dev-ops/k8s/`](ian-ddd-auth/docs/dev-ops/k8s/README.md) | 仅集群内（被网关以 Dubbo 调用） | TCP 20880 |
-| 网关 `ian-ddd-gateway` | [`ian-ddd-gateway/dev-ops/k8s/`](ian-ddd-gateway/dev-ops/k8s/README.md) | ClusterIP + Ingress | HTTP `/actuator/health` |
+| 网关 `ian-ddd-gateway` | [`ian-ddd-gateway/dev-ops/k8s/`](ian-ddd-gateway/dev-ops/k8s/README.md) | ClusterIP + Ingress（`/api`） | HTTP `/actuator/health` |
+| 管理端前端 `ddd-web` | `ddd-web/deploy/k8s/`（见该仓 README） | ClusterIP + Ingress（`/`） | HTTP `/` |
 
 每个目录包含 Deployment / Service / ConfigMap / `secret.yaml.example` / HPA / PDB（网关另有 Ingress），部署顺序为
 **ConfigMap → Deployment → Service(/Ingress) → HPA → PDB**，凭证先在集群外用 `kubectl create secret generic ... --from-env-file`
@@ -262,3 +302,4 @@ curl -H 'Host: gateway.example.com' -H 'Content-Type: application/json' \
 |-----------------------------------|-------------------------------------------------|--------------------------------------------------------------|
 | [`ddd`](https://github.com/IanGall/ddd)（本仓库） | 基座 + 认证服务实现 + 网关参考应用 | 提供基座制品与参考实现                                       |
 | [`ddd-scaffold`](https://github.com/IanGall/ddd-scaffold) | `scaffold-std` / `scaffold-gateway` 两个 Maven Archetype | 从骨架生成新服务与新网关；需与 `ddd` 同级检出后构建 |
+| [`ddd-web`](https://github.com/IanGall/ddd-web) | 管理端单页应用（React + Vite + TS + Ant Design） | 网关 `/api/admin/**` 的第一方消费者；需与 `ddd` 同级检出；前端侧的部署形态与本地启动见其 README |
