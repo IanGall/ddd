@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+# k8s 一键运维脚本：构建部署 / 查看状态 / 看日志 / 强制重启 / 清理。
+#
+# 用法：
+#   bash scripts/deploy-local.sh                  # 默认动作 deploy：构建 jar → 构建镜像 → 刷配置 → apply → 按需滚动 → 等就绪
+#   bash scripts/deploy-local.sh status           # 查看部署状态（Deployment/Pod/HPA + 最近事件）
+#   bash scripts/deploy-local.sh logs [--follow]  # 看日志（默认两个服务各取各 Pod 最后 100 行）
+#   bash scripts/deploy-local.sh restart          # 强制滚动重启（改了 Secret 但内容摘要没变时用）
+#   bash scripts/deploy-local.sh clean            # 清理工作负载与配置（保留命名空间）
+#   bash scripts/deploy-local.sh clean --purge    # 连命名空间一起删
+#   bash scripts/deploy-local.sh clean --images   # 连本地镜像一起删（下次部署会重新构建）
+#
+# 选项：
+#   --service all|auth|gateway   默认 all；clean 时只清单个服务的资源（命名空间与另一个服务保留）
+#   --profile dev|prod           默认 dev；prod 需要自备强密钥（见下）
+#   --namespace NAME             默认 ian-ddd
+#   --skip-build                 deploy 时跳过 Maven 与镜像构建，只刷配置并滚动
+#   --follow                     logs 时持续跟随（跟随最新的那个 Pod）
+#
+# 幂等：deploy 把「镜像 ID + 配置内容」的摘要打成 Deployment 的 Pod 模板注解，内容没变就跳过滚动更新；
+#       改代码、改 .env.local、换 profile 都会自动触发滚动，因此重复执行安全。
+#
+# 可覆盖的环境变量（默认按本机集群的 infra 命名空间）：
+#   MYSQL_HOST MYSQL_PORT MYSQL_DATABASE_00 MYSQL_DATABASE_01 MYSQL_DATABASE_RBAC
+#   REDIS_HOST REDIS_PORT NACOS_HOST KAFKA_BOOTSTRAP_SERVERS KAFKA_ENABLED
+#   DDD_ID_GENERATOR_NAMESPACE CHANNEL_ENCRYPTION_MASTER_KEY PLATFORM_ADMIN_TOKEN IMAGE_PREFIX
+#   中间件口令默认读仓库根 .env.local；显式传入的同名环境变量优先。
+#
+# 依赖：docker（含 buildx）、kubectl、JDK 21 + Maven（仅 deploy 且未 --skip-build 时需要）、.env.local。
+# 适用范围：本机/联调集群（直接用本地 Docker 里构建的镜像，不推仓库）。
+#           远端集群请先推镜像、用 kubectl create secret 注入真实凭证，不要用本脚本。
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
+
+ACTION="deploy"
+SERVICE="all"
+PROFILE="dev"
+NAMESPACE="ian-ddd"
+SKIP_BUILD="no"
+PURGE="no"
+WITH_IMAGES="no"
+FOLLOW="no"
+
+log() { printf '\033[32m[deploy]\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m[deploy]\033[0m %s\n' "$*"; }
+die() {
+  printf '\033[31m[deploy][ERROR]\033[0m %s\n' "$*" >&2
+  exit 1
+}
+
+usage() { sed -n '2,26p' "$0" | sed -e 's/^# \{0,1\}//'; }
+
+# 允许省略动作（bash deploy-local.sh --service auth 等价于 deploy --service auth）
+if [ $# -gt 0 ]; then
+  case "$1" in
+    -*) ;;
+    *) ACTION="$1" && shift ;;
+  esac
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --service)
+      SERVICE="${2:?--service 需要取值：all|auth|gateway}"
+      shift
+      ;;
+    --profile)
+      PROFILE="${2:?--profile 需要取值：dev|prod}"
+      shift
+      ;;
+    --namespace)
+      NAMESPACE="${2:?--namespace 需要取值}"
+      shift
+      ;;
+    --skip-build) SKIP_BUILD="yes" ;;
+    --purge) PURGE="yes" ;;
+    --images) WITH_IMAGES="yes" ;;
+    --follow | -f) FOLLOW="yes" ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) die "未知参数：$1（-h 看用法）" ;;
+  esac
+  shift
+done
+
+case "${ACTION}" in deploy | status | logs | restart | clean) ;; *) die "未知动作：${ACTION}（支持 deploy|status|logs|restart|clean）" ;; esac
+case "${SERVICE}" in all | auth | gateway) ;; *) die "--service 只支持 all|auth|gateway" ;; esac
+case "${PROFILE}" in dev | prod) ;; *) die "--profile 只支持 dev|prod" ;; esac
+[ -n "${NAMESPACE}" ] || die "命名空间不能为空"
+case "${NAMESPACE}" in default | kube-system | kube-public | kube-node-lease) die "拒绝操作系统命名空间 ${NAMESPACE}" ;; esac
+command -v kubectl >/dev/null || die "找不到 kubectl"
+
+service_module() {
+  case "$1" in
+    auth) echo "ian-ddd-auth/ian-ddd-auth-boot" ;;
+    gateway) echo "ian-ddd-gateway/gateway-app" ;;
+  esac
+}
+service_dir() {
+  case "$1" in
+    auth) echo "ian-ddd-auth/docs/dev-ops/k8s" ;;
+    gateway) echo "ian-ddd-gateway/dev-ops/k8s" ;;
+  esac
+}
+service_prefix() {
+  case "$1" in
+    auth) echo "ian-ddd-auth" ;;
+    gateway) echo "ian-ddd-gateway" ;;
+  esac
+}
+service_image() {
+  case "$1" in
+    auth) echo "${IMAGE_PREFIX:-system}/ian-ddd-auth-boot:1.0-SNAPSHOT" ;;
+    gateway) echo "${IMAGE_PREFIX:-system}/ian-ddd-gateway:1.0-SNAPSHOT" ;;
+  esac
+}
+# 把 all 展开成具体服务列表
+service_list() {
+  if [ "${SERVICE}" = "all" ]; then echo "auth gateway"; else echo "${SERVICE}"; fi
+}
+
+# ---------------------------------------------------------------- status / logs / restart
+
+do_status() {
+  log "命名空间 ${NAMESPACE} 的部署状态："
+  if ! kubectl get deploy -n "${NAMESPACE}" -o name >/dev/null 2>&1; then
+    warn "命名空间 ${NAMESPACE} 不存在"
+    return
+  fi
+  if [ -z "$(kubectl get deploy -n "${NAMESPACE}" -o name 2>/dev/null)" ]; then
+    warn "命名空间 ${NAMESPACE} 里没有 Deployment（先执行 deploy）"
+    return
+  fi
+  kubectl get deploy -n "${NAMESPACE}" \
+    -o custom-columns='DEPLOY:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas,IMAGE:.spec.template.spec.containers[0].image' 2>/dev/null | sed 's/^/  /' || true
+  kubectl get pods -n "${NAMESPACE}" \
+    -o custom-columns='POD:.metadata.name,READY:.status.containerStatuses[0].ready,STATUS:.status.phase,RESTARTS:.status.containerStatuses[0].restartCount' 2>/dev/null | sed 's/^/  /' || true
+  kubectl get hpa,ingress -n "${NAMESPACE}" 2>/dev/null | sed 's/^/  /' || true
+  log "最近事件（尾部 10 条）："
+  kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp 2>/dev/null | tail -10 | sed 's/^/  /' || true
+}
+
+do_logs() {
+  local svc prefix pods
+  for svc in $(service_list); do
+    prefix="$(service_prefix "${svc}")"
+    pods="$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${prefix}" \
+      --sort-by=.metadata.creationTimestamp -o name 2>/dev/null || true)"
+    [ -n "${pods}" ] || {
+      warn "${prefix}：没有 Pod"
+      continue
+    }
+    if [ "${FOLLOW}" = "yes" ]; then
+      # 跟随只能跟一个 Pod，取最新的那个
+      local newest
+      newest="$(echo "${pods}" | tail -1)"
+      log "${newest#pod/} 日志（follow，Ctrl-C 退出）"
+      kubectl logs -n "${NAMESPACE}" "${newest}" --tail=100 -f
+    else
+      for p in ${pods}; do
+        log "${p#pod/} 日志（最后 100 行）"
+        kubectl logs -n "${NAMESPACE}" "${p}" --tail=100 2>&1 | sed 's/^/  /' || true
+      done
+    fi
+  done
+}
+
+do_restart() {
+  local svc prefix
+  for svc in $(service_list); do
+    prefix="$(service_prefix "${svc}")"
+    if ! kubectl get deploy "${prefix}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+      warn "${prefix}：不存在，跳过"
+      continue
+    fi
+    log "滚动重启 ${prefix}"
+    kubectl rollout restart "deploy/${prefix}" -n "${NAMESPACE}" >/dev/null
+    kubectl rollout status "deploy/${prefix}" -n "${NAMESPACE}" --timeout=240s
+  done
+}
+
+# ---------------------------------------------------------------- clean
+
+do_clean() {
+  local targets cms svc prefix image
+  if [ "${SERVICE}" = "all" ]; then
+    targets="deploy,svc,ingress,hpa,pdb,secret"
+  else
+    targets="deploy,svc,ingress,hpa,pdb"
+  fi
+  log "清理命名空间 ${NAMESPACE} 中的部署与配置（--service ${SERVICE}）："
+  kubectl get ${targets},cm -n "${NAMESPACE}" 2>/dev/null | sed 's/^/  /' || true
+  if [ "${SERVICE}" = "all" ]; then
+    kubectl delete ${targets} -n "${NAMESPACE}" --all --ignore-not-found 2>&1 | sed 's/^/  /' || true
+    # ConfigMap 单独删：跳过 kube-root-ca.crt（由控制器维护，删了也会立刻重建）
+    cms="$(kubectl get cm -n "${NAMESPACE}" -o name 2>/dev/null | grep -v 'kube-root-ca.crt' || true)"
+    if [ -n "${cms}" ]; then
+      echo "${cms}" | xargs kubectl delete -n "${NAMESPACE}" 2>&1 | sed 's/^/  /' || true
+    fi
+  else
+    for svc in $(service_list); do
+      prefix="$(service_prefix "${svc}")"
+      kubectl delete deploy,svc,ingress,hpa,pdb "${prefix}" -n "${NAMESPACE}" --ignore-not-found 2>&1 | sed 's/^/  /' || true
+      kubectl delete cm "${prefix}-config" -n "${NAMESPACE}" --ignore-not-found 2>&1 | sed 's/^/  /' || true
+      kubectl delete secret "${prefix}-secret" -n "${NAMESPACE}" --ignore-not-found 2>&1 | sed 's/^/  /' || true
+    done
+  fi
+  if [ "${WITH_IMAGES}" = "yes" ]; then
+    # Pod 还在 Terminating 时镜像被容器引用着，docker rmi 会失败；先等 Pod 真正消失（最多 90s）
+    for svc in $(service_list); do
+      prefix="$(service_prefix "${svc}")"
+      kubectl wait --for=delete pod -l "app.kubernetes.io/name=${prefix}" -n "${NAMESPACE}" \
+        --timeout=90s >/dev/null 2>&1 || true
+    done
+    for svc in $(service_list); do
+      image="$(service_image "${svc}")"
+      if docker image inspect "${image}" >/dev/null 2>&1; then
+        log "删除本地镜像 ${image}"
+        docker rmi "${image}" >/dev/null 2>&1 || warn "删除 ${image} 失败（可能仍被容器/其它 tag 引用）"
+      fi
+    done
+  fi
+  if [ "${PURGE}" = "yes" ]; then
+    log "删除命名空间 ${NAMESPACE}"
+    kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=true 2>&1 | sed 's/^/  /' || true
+  else
+    log "保留命名空间 ${NAMESPACE}（要连命名空间一起删：clean --purge）"
+  fi
+  log "清理完成"
+}
+
+# ---------------------------------------------------------------- deploy
+
+env_value() { sed -n "s/^$1=//p" .env.local | head -1; }
+# resolve <变量名> <默认值>：显式传入的环境变量 > .env.local > 默认值
+resolve() {
+  local name="$1" fallback="${2:-}" current value
+  eval "current=\"\${${name}:-}\""
+  if [ -n "${current}" ]; then
+    eval "export ${name}=\"\${current}\""
+    return
+  fi
+  value="$(env_value "${name}")"
+  [ -n "${value}" ] || value="${fallback}"
+  eval "export ${name}=\"\${value}\""
+}
+
+load_config() {
+  [ -f .env.local ] || die "缺少 .env.local（放中间件口令）；先 cp .env.example .env.local 再填值"
+  resolve MYSQL_HOST "mysql.infra.svc.cluster.local"
+  resolve MYSQL_PORT "3306"
+  resolve MYSQL_DATABASE_00 "ian_dev_tech_db_00"
+  resolve MYSQL_DATABASE_01 "ian_dev_tech_db_01"
+  resolve MYSQL_DATABASE_RBAC "ddd_rbac"
+  resolve REDIS_HOST "redis.infra.svc.cluster.local"
+  resolve REDIS_PORT "6379"
+  resolve NACOS_HOST "nacos.infra.svc.cluster.local"
+  resolve KAFKA_BOOTSTRAP_SERVERS "kafka.infra.svc.cluster.local:9092"
+  # 本地 infra 的 Kafka 通告地址是 kafka:9092，跨命名空间解析不了；默认关掉降噪
+  resolve KAFKA_ENABLED "false"
+  resolve DDD_ID_GENERATOR_NAMESPACE "ddd-global-id"
+  resolve CHANNEL_ENCRYPTION_KEY_ID "dev-key-v1"
+  resolve IMAGE_PREFIX "system"
+  resolve MYSQL_USERNAME ""
+  resolve MYSQL_PASSWORD ""
+  resolve REDIS_PASSWORD ""
+  resolve DUBBO_REGISTRY_PASSWORD ""
+  resolve CHANNEL_ENCRYPTION_MASTER_KEY ""
+  resolve PLATFORM_ADMIN_TOKEN ""
+  local key
+  for key in MYSQL_USERNAME MYSQL_PASSWORD REDIS_PASSWORD DUBBO_REGISTRY_PASSWORD; do
+    eval "[ -n \"\${${key}:-}\" ]" || die "缺少 ${key}（填到 .env.local，或用环境变量传入）"
+  done
+  # 启动期有强校验（SecretConfigurationValidator）：prod 不接受全零渠道主密钥与示例平台令牌
+  if [ "${PROFILE}" = "prod" ]; then
+    [ "${CHANNEL_ENCRYPTION_MASTER_KEY}" != "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" ] \
+      || die "profile=prod 不接受全零渠道主密钥。用环境变量覆盖后重跑：
+  CHANNEL_ENCRYPTION_MASTER_KEY=\"\$(openssl rand -base64 32)\" PLATFORM_ADMIN_TOKEN=\"\$(openssl rand -hex 24)\" bash scripts/deploy-local.sh --profile prod
+  注意：换主密钥后，库里用旧密钥加密的渠道凭证将无法解密"
+    case "${PLATFORM_ADMIN_TOKEN}" in
+      "" | dev-platform-token | test-platform-token) die "profile=prod 需要独立的 PLATFORM_ADMIN_TOKEN（当前为空或示例值）" ;;
+    esac
+  fi
+}
+
+sha256() {
+  if command -v sha256sum >/dev/null; then sha256sum | cut -c1-16; else shasum -a 256 | cut -c1-16; fi
+}
+image_id() { docker image inspect "$1" --format '{{.Id}}' 2>/dev/null || echo missing; }
+
+build_jars() {
+  [ "${SKIP_BUILD}" = "yes" ] && return
+  log "构建 $2 的 jar：mvn -pl $1 -am package -DskipTests"
+  mvn -B -q -f pom.xml package -DskipTests -pl "$1" -am
+}
+
+build_image() {
+  [ "${SKIP_BUILD}" = "yes" ] && return
+  log "构建镜像（脚本自动识别本机架构）：$1"
+  (cd "$1" && bash ./build.sh >"${TMP_DIR}/build.log" 2>&1) || {
+    tail -20 "${TMP_DIR}/build.log" >&2
+    die "镜像构建失败"
+  }
+  grep -E '^构建 ' "${TMP_DIR}/build.log" | tail -1 || true
+}
+
+write_config() {
+  # $1 = auth|gateway → ${TMP_DIR}/<svc>.cm.env 与 <svc>.secret.env
+  local svc="$1" cm="${TMP_DIR}/$1.cm.env" secret="${TMP_DIR}/$1.secret.env"
+  if [ "${svc}" = "auth" ]; then
+    {
+      echo "SPRING_PROFILES_ACTIVE=${PROFILE}"
+      if [ "${PROFILE}" = "dev" ]; then
+        # dev 的分片配置把库地址写死成 127.0.0.1，集群内必须换成地址全部来自环境变量的 prod 分片配置
+        echo "SPRING_DATASOURCE_URL=jdbc:shardingsphere:classpath:sharding/sharding-jdbc-prod.yaml?placeholder-type=environment"
+      fi
+      echo "DUBBO_QOS_ENABLED=false"
+      echo "DUBBO_PROTOCOL_PORT=20880"
+      echo "DUBBO_REGISTRY_ADDRESS=nacos://${NACOS_HOST}:8848"
+      echo "DUBBO_REGISTRY_USERNAME=nacos"
+      echo "REDIS_HOST=${REDIS_HOST}"
+      echo "REDIS_PORT=${REDIS_PORT}"
+      echo "REDIS_DATABASE=0"
+      echo "DDD_ID_GENERATOR_NAMESPACE=${DDD_ID_GENERATOR_NAMESPACE}"
+      echo "MYSQL_HOST=${MYSQL_HOST}"
+      echo "MYSQL_PORT=${MYSQL_PORT}"
+      echo "MYSQL_DATABASE_00=${MYSQL_DATABASE_00}"
+      echo "MYSQL_DATABASE_01=${MYSQL_DATABASE_01}"
+      echo "MYSQL_DATABASE_RBAC=${MYSQL_DATABASE_RBAC}"
+      echo "MYSQL_USERNAME=${MYSQL_USERNAME}"
+      echo "KAFKA_ENABLED=${KAFKA_ENABLED}"
+      echo "KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}"
+      echo "CHANNEL_ENCRYPTION_KEY_ID=${CHANNEL_ENCRYPTION_KEY_ID}"
+      echo "XXL_JOB_ENABLED=false"
+    } >"${cm}"
+    {
+      echo "MYSQL_PASSWORD=${MYSQL_PASSWORD}"
+      echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
+      echo "DUBBO_REGISTRY_PASSWORD=${DUBBO_REGISTRY_PASSWORD}"
+      echo "CHANNEL_ENCRYPTION_MASTER_KEY=${CHANNEL_ENCRYPTION_MASTER_KEY}"
+      echo "PLATFORM_ADMIN_TOKEN=${PLATFORM_ADMIN_TOKEN}"
+    } >"${secret}"
+  else
+    {
+      echo "SPRING_PROFILES_ACTIVE=${PROFILE}"
+      echo "DUBBO_REGISTRY_ADDRESS=nacos://${NACOS_HOST}:8848"
+      echo "DUBBO_REGISTRY_USERNAME=nacos"
+    } >"${cm}"
+    echo "DUBBO_REGISTRY_PASSWORD=${DUBBO_REGISTRY_PASSWORD}" >"${secret}"
+  fi
+}
+
+ensure_namespace() {
+  kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 && return
+  log "创建命名空间 ${NAMESPACE}"
+  kubectl create namespace "${NAMESPACE}"
+}
+
+apply_config() {
+  local svc="$1" prefix="$2"
+  write_config "${svc}"
+  # 命令式创建 + apply：可重复执行，且真实凭证只进集群、不进仓库
+  kubectl create configmap "${prefix}-config" -n "${NAMESPACE}" \
+    --from-env-file="${TMP_DIR}/${svc}.cm.env" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  kubectl create secret generic "${prefix}-secret" -n "${NAMESPACE}" \
+    --from-env-file="${TMP_DIR}/${svc}.secret.env" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  log "已刷新配置：${prefix}-config / ${prefix}-secret"
+}
+
+apply_manifests() {
+  local svc="$1" dir prefix files
+  dir="$(service_dir "${svc}")"
+  prefix="$(service_prefix "${svc}")"
+  # 刻意逐文件 apply，不用 -f <目录>：目录里的 configmap.yaml 是 prod 默认值，会把按 profile 生成的配置冲掉
+  files=(-f "${dir}/deployment.yaml" -f "${dir}/service.yaml" -f "${dir}/hpa.yaml" -f "${dir}/pdb.yaml")
+  [ "${svc}" = "gateway" ] && files+=(-f "${dir}/ingress.yaml")
+  kubectl apply -n "${NAMESPACE}" "${files[@]}" >/dev/null
+  log "已应用清单：${dir}"
+}
+
+# 内容没变就不滚动：把「镜像 ID + 配置摘要」打成 Pod 模板注解，变了才触发滚动更新
+rollout_if_changed() {
+  local svc="$1" prefix image current live hash
+  prefix="$(service_prefix "${svc}")"
+  image="$(service_image "${svc}")"
+  current="$(image_id "${image}")"
+  [ "${current}" != "missing" ] || die "本地没有镜像 ${image}：去掉 --skip-build 重跑，或先手工构建"
+  live="$(kubectl get deploy "${prefix}" -n "${NAMESPACE}" \
+    -o jsonpath='{.spec.template.metadata.annotations.deploy-local\.hash}' 2>/dev/null || true)"
+  hash="$({ echo "${current}"; cat "${TMP_DIR}/${svc}.cm.env" "${TMP_DIR}/${svc}.secret.env"; } | sha256)"
+  if [ -n "${live}" ] && [ "${live}" = "${hash}" ]; then
+    log "${prefix}：镜像与配置都没变，跳过滚动更新"
+    return
+  fi
+  kubectl patch deploy "${prefix}" -n "${NAMESPACE}" --type=merge \
+    -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"deploy-local.hash\":\"${hash}\"}}}}}" >/dev/null
+  log "${prefix}：触发滚动更新（摘要 ${hash}）"
+}
+
+deploy_service() {
+  local svc="$1" module
+  module="$(service_module "${svc}")"
+  build_jars "${module}" "${svc}"
+  build_image "${module}"
+  apply_config "${svc}" "$(service_prefix "${svc}")"
+  apply_manifests "${svc}"
+  rollout_if_changed "${svc}"
+  kubectl rollout status "deploy/$(service_prefix "${svc}")" -n "${NAMESPACE}" --timeout=240s
+}
+
+do_deploy() {
+  load_config
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "${TMP_DIR}"' EXIT
+  ensure_namespace
+  local svc
+  for svc in $(service_list); do deploy_service "${svc}"; done
+  do_status
+  if [ "${SERVICE}" != "auth" ]; then
+    log "验证（宿主机经 Ingress，不需要 port-forward）："
+    printf '  curl -H "Host: gateway.example.com" http://127.0.0.1/actuator/health\n'
+  fi
+  warn "配置只由本脚本管理：手工 kubectl apply -f <目录> 会覆盖按 profile 生成的 ConfigMap，并绕开摘要检查"
+}
+
+case "${ACTION}" in
+  deploy) do_deploy ;;
+  status) do_status ;;
+  logs) do_logs ;;
+  restart) do_restart ;;
+  clean) do_clean ;;
+esac

@@ -13,6 +13,17 @@
 | `pdb.yaml` | `minAvailable: 1` |
 | `ingress.yaml` | 唯一对外入口，全量路径透传给网关 |
 
+**日常更新不需要按下面章节手工敲**：仓库根的一键脚本会做完这一整套（构建 jar → 构建镜像 → 刷新 ConfigMap/Secret → apply
+清单 → 按需滚动 → 等就绪，可重复执行、无变化不重启 Pod）：
+
+```bash
+bash scripts/deploy-local.sh --service gateway        # 一键部署/更新
+bash scripts/deploy-local.sh status|logs|restart      # 查看状态 / 看日志 / 强制滚动重启
+bash scripts/deploy-local.sh clean --service gateway  # 清理本服务的资源
+```
+
+下面各节是手工步骤与设计说明，排查问题时用得上。
+
 ## 1. 前置：构建镜像
 
 在仓库根执行（脚本自带架构识别）：

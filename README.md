@@ -180,6 +180,19 @@ E2E 并集行覆盖率目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可
 
 ## 部署到 Kubernetes
 
+**一键脚本**（构建 jar → 构建镜像 → 刷新 ConfigMap/Secret → apply 清单 → 按需滚动 → 等就绪，可重复执行）：
+
+```bash
+bash scripts/deploy-local.sh                    # 默认：两个服务、dev profile、命名空间 ian-ddd
+bash scripts/deploy-local.sh --service auth     # 只更新认证服务（--service gateway 只更新网关）
+bash scripts/deploy-local.sh status|logs|restart # 查看状态 / 看日志（--follow）/ 强制滚动重启
+bash scripts/deploy-local.sh clean              # 清理工作负载与配置（--purge 连命名空间，--images 连本地镜像）
+```
+
+脚本要点：自动识别本机架构出镜像（`--profile prod` 时要求自备强密钥，本地开发值会被启动期校验拒绝）；给 Deployment 打
+「镜像 + 配置」摘要注解，内容没变就不重启 Pod；配置只由脚本管理（手工 `kubectl apply -f <目录>` 会覆盖按 profile 生成的
+ConfigMap）。下面是不用脚本时的手工步骤与清单说明。
+
 两个可部署服务各自在模块内维护 k8s 清单（原生 YAML，`kubectl apply -f` 直接使用，不需要 Helm/Kustomize），权威说明在各自的
 `k8s/README.md`：
 
@@ -196,7 +209,8 @@ E2E 并集行覆盖率目标 40%（脚本内软提示，`COVERAGE_MIN_RATIO` 可
 
 - **认证服务没有 HTTP 端口**：`spring-boot-starter-web` 仅在 `-Phttp` 下引入且默认不激活，`application.yml` 的
   `server.port: 8091` 从不被监听；探针与端口映射都必须指向 Dubbo 20880，按 8091 配置会让 Pod 进入 CrashLoopBackOff。
-- **本机 OrbStack 集群没有 metrics-server**：HPA 对象能被创建但不会伸缩，`kubectl apply --dry-run=server` 只能校验 schema。
+- **HPA 需要 metrics-server，且 Deployment 必须有 `requests.cpu`**：本地 OrbStack 集群已装好（`kube-system/metrics-server`，
+  带 `--kubelet-insecure-tls`）；没有 metrics-server 时 HPA 对象能创建但不会伸缩，`kubectl top` 也不可用。
 
 ## CI
 
