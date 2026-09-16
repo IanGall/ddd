@@ -32,8 +32,10 @@ data:
   REDIS_HOST: "redis.infra.svc.cluster.local"
   REDIS_PORT: "6379"
   REDIS_DATABASE: "0"
-  # 所有实例必须连同一个 Redis 且共享该命名空间，否则全局 ID 会撞号；多环境也不要用不同值
-  DDD_ID_GENERATOR_NAMESPACE: "ddd-global-id"
+  # Worker ID 池的服务级身份，与 spring.application.name 保持一致。
+  # 注意：变更该值等于切换到另一个 Worker ID 池，必须停机发布——滚动发布期间新旧 Pod
+  # 分属两个互不知晓的池，可能各自租到同一个 Worker ID 而产生重复 ID。
+  DDD_ID_GENERATOR_NAMESPACE: "ian-ddd-auth-boot"
 
   # ---------------- MySQL（ShardingSphere 按环境变量渲染分片配置） ----------------
   # sharding-jdbc-prod.yaml 用 $${VAR} 占位符 + JDBC URL 的 placeholder-type=environment 渲染，

@@ -17,19 +17,28 @@ class IdGeneratorPropertiesTest {
         IdGeneratorProperties properties = new IdGeneratorProperties();
 
         assertThat(properties.isEnabled()).isTrue();
-        assertThat(properties.getNamespace()).isEqualTo("ddd-global-id");
+        // 命名空间为空表示「由自动装配从 spring.application.name 派生」，不再是共享的默认值
+        assertThat(properties.getNamespace()).isNull();
         assertThat(properties.getWorkerIdBitLength()).isEqualTo(10);
         assertThat(properties.getSequenceBitLength()).isEqualTo(12);
         assertThat(properties.getLeaseDuration()).isEqualTo(Duration.ofSeconds(30));
         assertThat(properties.getRenewInterval()).isEqualTo(Duration.ofSeconds(10));
         assertThat(properties.workerPoolSize()).isEqualTo(1024);
-        assertThat(properties.getWorkerIdBlockSize()).isEqualTo(64);
         assertThat(properties.getBusinesses()).isEmpty();
     }
 
     @Test
-    void shouldRejectInvalidNamespace() {
+    void shouldRejectMissingNamespace() {
         IdGeneratorProperties properties = new IdGeneratorProperties();
+
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IdGenerationException.class)
+                .hasMessageContaining("namespace");
+    }
+
+    @Test
+    void shouldRejectInvalidNamespace() {
+        IdGeneratorProperties properties = valid();
         properties.setNamespace("ddd:{invalid}");
 
         assertThatThrownBy(properties::validate)
@@ -39,7 +48,7 @@ class IdGeneratorPropertiesTest {
 
     @Test
     void shouldRejectNamespaceContainingColon() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+        IdGeneratorProperties properties = valid();
         properties.setNamespace("ddd:id-generator");
 
         assertThatThrownBy(properties::validate)
@@ -48,18 +57,18 @@ class IdGeneratorPropertiesTest {
     }
 
     @Test
-    void shouldRejectBitLengthOverflow() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+    void shouldRejectWorkerAndSequenceBitsExceedingLimitWithoutBusinesses() {
+        IdGeneratorProperties properties = valid();
         properties.setWorkerIdBitLength(11);
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("必须等于 22");
+                .hasMessageContaining("之和不得超过 22");
     }
 
     @Test
     void shouldRejectRenewIntervalNotShorterThanLease() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+        IdGeneratorProperties properties = valid();
         properties.setLeaseDuration(Duration.ofSeconds(10));
         properties.setRenewInterval(Duration.ofSeconds(10));
 
@@ -69,19 +78,9 @@ class IdGeneratorPropertiesTest {
     }
 
     @Test
-    void shouldRejectNonPositiveWorkerIdBlockSize() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setWorkerIdBlockSize(0);
-
-        assertThatThrownBy(properties::validate)
-                .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("worker-id-block-size 必须大于 0");
-    }
-
-    @Test
     void shouldRejectIllegalBusinessName() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setBusinesses(Map.of("Order", 0));
+        IdGeneratorProperties properties = valid();
+        properties.setBusinesses(Map.of("Order", 12));
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
@@ -90,8 +89,8 @@ class IdGeneratorPropertiesTest {
 
     @Test
     void shouldRejectBusinessNameStartingWithDigit() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setBusinesses(Map.of("1order", 0));
+        IdGeneratorProperties properties = valid();
+        properties.setBusinesses(Map.of("1order", 12));
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
@@ -99,73 +98,76 @@ class IdGeneratorPropertiesTest {
     }
 
     @Test
-    void shouldRejectNegativeBusinessBlockIndex() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setBusinesses(Map.of("order", -1));
+    void shouldRejectBusinessSequenceBitLengthOutOfRange() {
+        IdGeneratorProperties properties = valid();
+        properties.setBusinesses(Map.of("order", 2));
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("block 序号不能为负");
+                .hasMessageContaining("业务 order 的 sequence-bit-length 必须在 3 到 21 之间");
     }
 
     @Test
-    void shouldRejectDuplicatedBusinessBlockIndex() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+    void shouldRejectMissingBusinessSequenceBitLength() {
+        IdGeneratorProperties properties = valid();
         Map<String, Integer> businesses = new LinkedHashMap<>();
-        businesses.put("order", 1);
-        businesses.put("user", 1);
+        businesses.put("order", null);
         properties.setBusinesses(businesses);
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("block 序号重复：1");
+                .hasMessageContaining("业务 order 的 sequence-bit-length");
     }
 
     @Test
-    void shouldRejectBusinessRangesBeyondWorkerPool() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setBusinesses(Map.of("order", 16));
+    void shouldRejectBusinessSequenceBitsExceedingLimit() {
+        IdGeneratorProperties properties = valid();
+        properties.setWorkerIdBitLength(14);
+        properties.setBusinesses(Map.of("order", 12));
 
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("超出池容量");
+                .hasMessageContaining("业务 order 的序列位长过大");
     }
 
     @Test
-    void shouldRejectHugeBusinessBlockIndexWithoutOverflow() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
-        properties.setBusinesses(Map.of("order", Integer.MAX_VALUE));
+    void shouldAcceptBusinessSequenceBitsFillingBudgetExactly() {
+        IdGeneratorProperties properties = valid();
+        properties.setWorkerIdBitLength(10);
+        properties.setBusinesses(Map.of("order", 12));
 
-        assertThatThrownBy(properties::validate)
-                .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("超出池容量");
+        properties.validate();
+
+        assertThat(properties.workerPoolSize()).isEqualTo(1024);
+        assertThat(properties.sequenceBitLengthFor("order")).isEqualTo(12);
     }
 
     @Test
-    void shouldAcceptBusinessRangesFillingWorkerPoolExactly() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+    void shouldAllowBusinessesToUseSmallerBudgetThanTheLimit() {
+        IdGeneratorProperties properties = valid();
         properties.setWorkerIdBitLength(6);
         properties.setSequenceBitLength(16);
-        properties.setWorkerIdBlockSize(32);
-        Map<String, Integer> businesses = new LinkedHashMap<>();
-        businesses.put("order", 0);
-        businesses.put("user", 1);
-        properties.setBusinesses(businesses);
+        properties.setBusinesses(Map.of("order", 10));
 
         properties.validate();
 
         assertThat(properties.workerPoolSize()).isEqualTo(64);
-        assertThat(properties.blockStart(0)).isZero();
-        assertThat(properties.blockStart(1)).isEqualTo(32);
+        assertThat(properties.sequenceBitLengthFor("order")).isEqualTo(10);
     }
 
     @Test
     void shouldNormalizeNullBusinessesToEmptyMap() {
-        IdGeneratorProperties properties = new IdGeneratorProperties();
+        IdGeneratorProperties properties = valid();
         properties.setBusinesses(null);
 
         properties.validate();
 
         assertThat(properties.getBusinesses()).isEmpty();
+    }
+
+    private IdGeneratorProperties valid() {
+        IdGeneratorProperties properties = new IdGeneratorProperties();
+        properties.setNamespace("ddd-global-id");
+        return properties;
     }
 }

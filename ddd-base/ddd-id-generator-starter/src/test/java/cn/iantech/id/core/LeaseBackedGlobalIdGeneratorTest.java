@@ -34,6 +34,7 @@ class LeaseBackedGlobalIdGeneratorTest {
     void setUp() {
         redisService = mock(IRedisService.class);
         properties = new IdGeneratorProperties();
+        properties.setNamespace("ddd-global-id");
         properties.setLeaseDuration(Duration.ofMillis(100));
         properties.setRenewInterval(Duration.ofMillis(30));
         nanoTime = new AtomicLong(1_000L);
@@ -56,6 +57,24 @@ class LeaseBackedGlobalIdGeneratorTest {
         generator.close();
 
         verify(renewalTask).cancel(false);
+    }
+
+    @Test
+    void shouldServeMultipleBusinessGeneratorsFromOneAcquiredLease() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(7L, 1L);
+        WorkerIdLeaseHolder holder = holder();
+        LeaseBackedGlobalIdGenerator first = new LeaseBackedGlobalIdGenerator(holder, () -> 1L);
+        LeaseBackedGlobalIdGenerator second = new LeaseBackedGlobalIdGenerator(holder, () -> 2L);
+
+        assertThat(first.nextId()).isEqualTo(1L);
+        assertThat(second.nextId()).isEqualTo(2L);
+
+        // 全部业务共用同一个实例级 Worker ID，因此只应取租约一次
+        verify(redisService, times(1)).executeLongScript(anyString(), anyList(), anyList());
+
+        // 共享租约下的关闭是整体生效的：租约是实例级的，一个业务关闭即释放实例租约
+        first.close();
+        assertThatThrownBy(second::nextId).isInstanceOf(IdGenerationException.class);
     }
 
     @Test
@@ -119,8 +138,12 @@ class LeaseBackedGlobalIdGeneratorTest {
         verify(renewalTask, times(1)).cancel(false);
     }
 
-    private LeaseBackedGlobalIdGenerator generator() {
+    private WorkerIdLeaseHolder holder() {
         RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
-        return new LeaseBackedGlobalIdGenerator(lease, () -> 42L, scheduler, RENEW_INTERVAL_MILLIS);
+        return new WorkerIdLeaseHolder(lease, scheduler, RENEW_INTERVAL_MILLIS);
+    }
+
+    private LeaseBackedGlobalIdGenerator generator() {
+        return new LeaseBackedGlobalIdGenerator(holder(), () -> 42L);
     }
 }

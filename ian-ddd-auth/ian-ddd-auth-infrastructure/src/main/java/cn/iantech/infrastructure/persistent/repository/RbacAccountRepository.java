@@ -27,7 +27,7 @@ public class RbacAccountRepository implements IRbacAccountRepository {
                                 GlobalIdGeneratorProvider idGeneratorProvider) {
         this.accountDao = accountDao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.RBAC_ACCOUNT.businessName());
+        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.IDENTITY.businessName());
     }
 
     @Override

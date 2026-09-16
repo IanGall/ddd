@@ -1,8 +1,9 @@
 # 认证服务水平扩缩容。
 #
-# 扩容硬上限来自应用约束：application.yml 的 ddd.id-generator.worker-id-block-size=64，
-# 即「每个业务的副本数不得超过该值」，超限时 ID 生成器拿不到 Worker ID 租约、启动直接失败。
-# 这里取 8，并为缩容留 300s 稳定窗：频繁伸缩会让每个副本反复续租 / 反注册，代价高于收益。
+# 扩容硬上限来自 ID 生成器的 WorkerId 池：一个实例只租用一个 WorkerId（实例内三个业务共用它），
+# 池容量为 2^worker-id-bit-length = 1024，因此副本数上限是 1024，与业务数量无关。
+# 超限时新副本拿不到 WorkerId 租约、启动直接失败。
+# 这里取 8，并为缩容留 300s 稳定窗：频繁伸缩会让每个副本反复续租 / 释放 WorkerId，代价高于收益。
 #
 # 注意：本机 OrbStack 集群没有 metrics-server，HPA 会一直显示 <unknown> 且不会伸缩；
 # 生产集群需自行确认 metrics-server 已就绪。

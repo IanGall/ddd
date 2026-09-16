@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,6 +21,8 @@ import static org.mockito.Mockito.*;
 
 class RedisWorkerLeaseTest {
 
+    private static final String NAMESPACE = "ddd-global-id";
+
     private IRedisService redisService;
     private IdGeneratorProperties properties;
     private AtomicLong nanoTime;
@@ -27,13 +31,14 @@ class RedisWorkerLeaseTest {
     void setUp() {
         redisService = mock(IRedisService.class);
         properties = new IdGeneratorProperties();
+        properties.setNamespace(NAMESPACE);
         properties.setLeaseDuration(Duration.ofMillis(100));
         properties.setRenewInterval(Duration.ofMillis(30));
         nanoTime = new AtomicLong(1_000L);
     }
 
     @Test
-    void shouldAcquireWorkerFromConfiguredPoolAndUseSameHashTag() {
+    void shouldAcquireSingleWorkerFromWholePoolAndUseSameHashTag() {
         when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(17L);
 
         RedisWorkerLease lease = new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
@@ -46,74 +51,83 @@ class RedisWorkerLeaseTest {
         ArgumentCaptor<String> scriptCaptor = ArgumentCaptor.forClass(String.class);
         verify(redisService).executeLongScript(
                 scriptCaptor.capture(), keysCaptor.capture(), argumentsCaptor.capture());
-        assertThat(scriptCaptor.getValue()).contains("'SET', KEYS[3 + slot], owner, 'NX', 'PX', leaseMillis");
+        assertThat(scriptCaptor.getValue())
+                .contains("redis.call('SET', KEYS[leaseKeyBase + 1 + slot], owner, 'NX', 'PX', leaseMillis)");
         assertThat(keysCaptor.getValue()).hasSize(1026)
-                .allMatch(key -> key.startsWith("{ddd-global-id}:worker:"));
+                .allMatch(key -> key.startsWith("{" + NAMESPACE + "}:worker:"));
         assertThat(keysCaptor.getValue()).contains(
                 "{ddd-global-id}:worker:cursor",
-                "{ddd-global-id}:worker:layout",
+                "{ddd-global-id}:worker:pool",
                 "{ddd-global-id}:worker:lease:0",
                 "{ddd-global-id}:worker:lease:1023");
-        assertThat(argumentsCaptor.getValue()).isEqualTo(List.of(0, 1024, 100L, "instance-a", "10:12"));
+        assertThat(argumentsCaptor.getValue())
+                .isEqualTo(List.of(1024, 100L, "instance-a", "10", 0));
     }
 
     @Test
-    void shouldAcquireWithinBusinessBlockAndUseBlockCursorKey() {
-        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(130L);
+    void shouldWritePerBusinessLayoutKeysSortedByName() {
+        Map<String, Integer> businesses = new LinkedHashMap<>();
+        businesses.put("rbac-user", 12);
+        businesses.put("identity", 10);
+        properties.setBusinesses(businesses);
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(3L);
 
-        RedisWorkerLease lease = RedisWorkerLease.forBlock(redisService, properties, 2);
-
-        assertThat(lease.workerId()).isEqualTo(130);
+        new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a");
 
         ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<?>> argumentsCaptor = ArgumentCaptor.forClass(List.class);
         verify(redisService).executeLongScript(anyString(), keysCaptor.capture(), argumentsCaptor.capture());
-        assertThat(keysCaptor.getValue()).hasSize(66)
-                .startsWith("{ddd-global-id}:worker:cursor:2", "{ddd-global-id}:worker:layout",
-                        "{ddd-global-id}:worker:lease:128")
-                .endsWith("{ddd-global-id}:worker:lease:191");
-        assertThat(argumentsCaptor.getValue().get(0)).isEqualTo(128);
-        assertThat(argumentsCaptor.getValue().get(1)).isEqualTo(64);
-        assertThat(argumentsCaptor.getValue().get(2)).isEqualTo(100L);
-        assertThat(argumentsCaptor.getValue().get(3).toString()).isNotBlank();
-        assertThat(argumentsCaptor.getValue().get(4)).isEqualTo("10:12");
+        // 业务级守卫键按业务名排序，且位于池守卫之后、租约键之前
+        assertThat(keysCaptor.getValue()).hasSize(2 + 2 + 1024)
+                .startsWith("{ddd-global-id}:worker:cursor", "{ddd-global-id}:worker:pool",
+                        "{ddd-global-id}:worker:layout:identity", "{ddd-global-id}:worker:layout:rbac-user",
+                        "{ddd-global-id}:worker:lease:0")
+                .endsWith("{ddd-global-id}:worker:lease:1023");
+        assertThat(argumentsCaptor.getValue())
+                .isEqualTo(List.of(1024, 100L, "instance-a", "10", 2, "10:10", "10:12"));
     }
 
     @Test
-    void shouldRejectWorkerIdReturnedOutsideBusinessBlock() {
-        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(192L);
+    void shouldRejectWorkerIdReturnedOutsidePool() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(1024L);
 
-        assertThatThrownBy(() -> RedisWorkerLease.forBlock(redisService, properties, 2))
+        assertThatThrownBy(() -> new RedisWorkerLease(redisService, properties, nanoTime::get, "instance-a"))
                 .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("区间外的 Worker ID：192")
-                .hasMessageContaining("[128, 192)");
+                .hasMessageContaining("池外的 Worker ID：1024")
+                .hasMessageContaining("池容量 1024");
     }
 
     @Test
-    void shouldFailWithBlockRangeWhenBusinessBlockIsExhausted() {
+    void shouldFailWhenWorkerPoolIsExhausted() {
         when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(-1L);
 
-        assertThatThrownBy(() -> RedisWorkerLease.forBlock(redisService, properties, 1))
+        assertThatThrownBy(() -> new RedisWorkerLease(
+                redisService, properties, nanoTime::get, "instance-a"))
                 .isInstanceOf(IdGenerationException.class)
                 .hasMessageContaining("没有可用")
-                .hasMessageContaining("[64, 128)");
+                .hasMessageContaining("池已耗尽");
     }
 
     @Test
-    void shouldShareLayoutKeyAcrossBusinessBlocks() {
-        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(0L, 64L);
+    void shouldFailWhenPoolBitLengthDoesNotMatch() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(-2L);
 
-        RedisWorkerLease.forBlock(redisService, properties, 0);
-        RedisWorkerLease.forBlock(redisService, properties, 1);
+        assertThatThrownBy(() -> new RedisWorkerLease(
+                redisService, properties, nanoTime::get, "instance-a"))
+                .isInstanceOf(IdGenerationException.class)
+                .hasMessageContaining("不同的 worker-id-bit-length");
+    }
 
-        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(List.class);
-        ArgumentCaptor<List<?>> argumentsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(redisService, times(2)).executeLongScript(anyString(), keysCaptor.capture(), argumentsCaptor.capture());
-        assertThat(keysCaptor.getAllValues()).allSatisfy(
-                keys -> assertThat(keys).contains("{ddd-global-id}:worker:layout"));
-        assertThat(keysCaptor.getAllValues().get(0)).doesNotContain("{ddd-global-id}:worker:cursor:1");
-        assertThat(argumentsCaptor.getAllValues().get(0).get(4)).isEqualTo("10:12");
-        assertThat(argumentsCaptor.getAllValues().get(1).get(4)).isEqualTo("10:12");
+    @Test
+    void shouldFailWhenDeclaredBusinessSequenceBitLengthDoesNotMatch() {
+        properties.setBusinesses(Map.of("identity", 12));
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(-3L);
+
+        assertThatThrownBy(() -> new RedisWorkerLease(
+                redisService, properties, nanoTime::get, "instance-a"))
+                .isInstanceOf(IdGenerationException.class)
+                .hasMessageContaining("sequence-bit-length 与历史不一致")
+                .hasMessageContaining("identity=10:12");
     }
 
     @Test
@@ -136,26 +150,6 @@ class RedisWorkerLeaseTest {
                 .containsExactly("{ddd-global-id}:worker:lease:3");
         assertThat(argumentsCaptor.getAllValues().get(1)).isEqualTo(List.of("instance-a", 100L));
         assertThat(argumentsCaptor.getAllValues().get(2)).isEqualTo(List.of("instance-a"));
-    }
-
-    @Test
-    void shouldFailWhenWorkerPoolIsExhausted() {
-        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(-1L);
-
-        assertThatThrownBy(() -> new RedisWorkerLease(
-                redisService, properties, nanoTime::get, "instance-a"))
-                .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("没有可用");
-    }
-
-    @Test
-    void shouldFailWhenNamespaceLayoutDoesNotMatch() {
-        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(-2L);
-
-        assertThatThrownBy(() -> new RedisWorkerLease(
-                redisService, properties, nanoTime::get, "instance-a"))
-                .isInstanceOf(IdGenerationException.class)
-                .hasMessageContaining("不同的 Worker ID 与序列位宽");
     }
 
     @Test

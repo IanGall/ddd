@@ -2,13 +2,12 @@ package cn.iantech.id.core;
 
 import cn.iantech.id.GlobalIdGenerator;
 import cn.iantech.id.IdGenerationException;
-import cn.iantech.id.autoconfigure.IdGeneratorProperties;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.LongSupplier;
 
 /**
- * 雪花漂移算法的单实例实现。
+ * 雪花漂移算法的单业务实例实现。
  *
  * <p>ID 布局（与历史实现逐位一致，保证与已入库 ID 的大小与排序兼容）：
  * <pre>
@@ -16,8 +15,9 @@ import java.util.function.LongSupplier;
  *      + (workerId &lt;&lt; sequenceBitLength) + 序列号
  * </pre>
  *
- * <p>每个实例持有独立的锁与序列状态，因此同一 JVM 内可为不同业务各建一个实例，
- * 各自持有真实且互不重叠的 Worker ID。
+ * <p>每个业务实例持有独立的锁与序列状态，因此同一 JVM 内可为不同业务各建一个实例。
+ * 但它们传入的是**同一个实例级 Worker ID**（由 {@link WorkerIdLeaseHolder} 独占），
+ * 只有序列位宽可以各自不同；因此跨业务的 ID 会重复，唯一性只在业务域内成立。
  *
  * <p>与参考实现（yitter 1.0.6）的两处刻意差异：
  * <ol>
@@ -71,9 +71,15 @@ final class SnowflakeIdGenerator implements GlobalIdGenerator {
         this.millis = Objects.requireNonNull(millis, "毫秒时钟不能为空");
     }
 
-    static SnowflakeIdGenerator of(int workerId, IdGeneratorProperties properties) {
-        return new SnowflakeIdGenerator(workerId, properties.getWorkerIdBitLength(),
-                properties.getSequenceBitLength(), TOP_OVER_COST_COUNT, System::currentTimeMillis);
+    /**
+     * 用共享的 Worker ID 与指定的位宽构造生成器。
+     *
+     * <p>Worker ID 由应用实例级租约独占，同一实例内的多个业务生成器传入同一个 {@code workerId}，
+     * 但可以各自指定 {@code sequenceBitLength}（位宽之和不得超过 22）。
+     */
+    static SnowflakeIdGenerator of(int workerId, int workerIdBitLength, int sequenceBitLength) {
+        return new SnowflakeIdGenerator(workerId, workerIdBitLength, sequenceBitLength,
+                TOP_OVER_COST_COUNT, System::currentTimeMillis);
     }
 
     @Override

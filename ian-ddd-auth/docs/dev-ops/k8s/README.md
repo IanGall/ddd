@@ -96,9 +96,13 @@ kubectl apply --dry-run=server -n "$NS" -f ian-ddd-auth/docs/dev-ops/k8s/
 
 ## 5. 副本数与全局 ID
 
-`ddd.id-generator.businesses` 声明了 5 个业务、`worker-id-block-size: 64`，因此**每个业务的副本数不得超过 64**；超限时新副本拿不到
-Worker ID 租约，启动期抛 `IdGenerationException`。HPA 上限取 8，留足余量。所有副本必须连同一个 Redis 且共享
-`DDD_ID_GENERATOR_NAMESPACE`。
+`ddd.id-generator.businesses` 声明了 3 个业务（`identity` / `auth-session` / `channel-credential`）。**一个实例只租用一个
+Worker ID，实例内三个业务共用它**，因此业务数量不影响副本上限：池容量是 `2^worker-id-bit-length` = 1024，
+副本数超过它才会拿不到 Worker ID 租约并在启动期抛 `IdGenerationException`。HPA 上限取 8，留足余量。
+
+Worker ID 池是**服务级**的：`DDD_ID_GENERATOR_NAMESPACE` 就是池的身份（默认取 `spring.application.name`）。
+**变更该值等于换池，必须停机发布**——滚动发布期间新旧 Pod 分属两个互不知晓的池，可能各自租到同一个
+Worker ID 而产生重复 ID。
 
 ## 6. 变更生效方式
 
@@ -155,7 +159,7 @@ DUBBO_REGISTRY_USERNAME=nacos
 REDIS_HOST=redis.infra.svc.cluster.local
 REDIS_PORT=6379
 REDIS_DATABASE=0
-DDD_ID_GENERATOR_NAMESPACE=ddd-global-id
+DDD_ID_GENERATOR_NAMESPACE=ian-ddd-auth-boot
 MYSQL_HOST=mysql.infra.svc.cluster.local
 MYSQL_PORT=3306
 MYSQL_DATABASE_00=ian_dev_tech_db_00

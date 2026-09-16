@@ -26,7 +26,7 @@ public class CustomerUserRepository implements ICustomerUserRepository {
                                  GlobalIdGeneratorProvider idGeneratorProvider) {
         this.dao = dao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.CUSTOMER_USER.businessName());
+        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.IDENTITY.businessName());
     }
 
     @Override

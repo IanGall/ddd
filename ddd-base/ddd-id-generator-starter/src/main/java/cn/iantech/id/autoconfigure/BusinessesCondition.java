@@ -15,6 +15,7 @@ import java.util.Map;
  *
  * <p>业务映射没有单一属性名（只有 {@code businesses.<name>} 叶子键），
  * 因此不能用 {@code @ConditionalOnProperty}，改用 {@link Binder} 直接绑定该映射。
+ * 叶子值是该业务的序列位宽，这里只关心映射是否为空。
  */
 abstract class BusinessesCondition extends SpringBootCondition {
 

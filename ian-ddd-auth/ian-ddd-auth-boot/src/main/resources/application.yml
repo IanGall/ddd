@@ -19,18 +19,18 @@ auth:
       access-token-timeout: ${AUTH_ACCESS_TOKEN_TIMEOUT:9000}
       refresh-token-timeout: ${AUTH_REFRESH_TOKEN_TIMEOUT:2592000}
 
-# 所有业务实例必须连接同一 Redis，并共享该命名空间以保证 ID 全局唯一。
-# businesses 只支持在 YAML 中声明（映射键无法用环境变量覆盖）：
-# 块序号 i 占用 Worker ID 区间 [i * worker-id-block-size, (i + 1) * worker-id-block-size)，
-# 因此每个业务的副本数不得超过 worker-id-block-size。
-# channel_data_scope 已改为数据库自增，不再需要业务块。
+# Worker ID 池是服务级的：命名空间未显式配置时取 spring.application.name（此处 ian-ddd-auth-boot），
+# 因此不同服务天然落在各自的池里，不会互相抢占 Worker ID。
+# 可用环境变量 DDD_ID_GENERATOR_NAMESPACE 覆盖，但**变更它的值必须先停机**：
+# 新旧命名空间是两个互不知晓的池，滚动发布期间两边可能各自租到同一个 Worker ID 而重号。
+# businesses 只支持在 YAML 中声明（映射键没有单一属性名，无法用环境变量覆盖），值为该业务的序列位宽。
+# 划界判据是「ID 是否流入同一个字段」：rbac_account / rbac_user / customer_user 的 ID 都会流进
+# AuthSession.userId 并由 userType 分派，因此合并为一个 identity 业务，保证该字段在服务内唯一。
+# channel_data_scope 已改为数据库自增，不需要业务声明。
 ddd:
   id-generator:
-    namespace: ${DDD_ID_GENERATOR_NAMESPACE:ddd-global-id}
-    worker-id-block-size: 64
+    worker-id-bit-length: 10
     businesses:
-      auth-session: 0
-      rbac-account: 1
-      rbac-user: 2
-      customer-user: 3
-      channel-credential: 4
+      identity: 12
+      auth-session: 12
+      channel-credential: 12

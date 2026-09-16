@@ -19,25 +19,33 @@
 - Infrastructure 默认依赖 `ddd-id-generator-starter`，业务通过构造器注入
   `cn.iantech.id.GlobalIdGeneratorProvider`，在构造期用 `forBusiness(...)` 取到本业务的生成器，调用 `nextId()` 获取
   `long` 类型全局唯一 ID。
-- 本服务按业务划分 Worker ID 区间（`worker-id-block-size: 64`），业务名与块序号集中在
-  `cn.iantech.infrastructure.id.AuthIdBusiness` 与 `application.yml` 的 `ddd.id-generator.businesses` 中，
-  两者必须保持一致，否则启动阶段取生成器即失败：
+- 本服务声明 3 个业务，业务名与各自的序列位宽集中在 `cn.iantech.infrastructure.id.AuthIdBusiness` 与
+  `application.yml` 的 `ddd.id-generator.businesses` 中，两者必须保持一致，否则启动阶段取生成器即失败：
 
-  | 业务名                | 块序号 | Worker ID 区间 |
-  |-----------------------|--------|----------------|
-  | `auth-session`        | 0      | `[0, 64)`      |
-  | `rbac-account`        | 1      | `[64, 128)`    |
-  | `rbac-user`           | 2      | `[128, 192)`   |
-  | `customer-user`       | 3      | `[192, 256)`   |
-  | `channel-credential`  | 4      | `[256, 320)`   |
+  | 业务名                | sequenceBitLength | 覆盖的表 |
+  |-----------------------|-------------------|----------|
+  | `identity`            | 12 | `rbac_account` / `rbac_user` / `customer_user` |
+  | `auth-session`        | 12 | 登录会话（Redis） |
+  | `channel-credential`  | 12 | `channel_credential` |
 
-- Starter 使用 Redis 租约自动分配并续租 Worker ID；应用无需手工配置 Worker ID，但必须提供可用的 Redis 连接。每个业务独立续租，
-  单个业务的租约失效不会影响其它业务出号。
+  `identity` 覆盖三张表是**划界判据**的结果：这三张表的 ID 都会流进 `AuthSession.userId`（再由 `userType` 分派），
+  因此必须由同一个生成器产出才能保证该字段在服务内唯一。反之，只要有一列/一个 Redis 作用域会同时承载两个业务的 ID，
+  就必须合并；不满足该判据时不要合并（合并会共享序列与位宽）。`channel_data_scope` 已改为数据库自增，不需要业务声明。
+
+- **Worker ID 是实例级资源**：一个 Pod 只租一个 Worker ID，三个业务共用它，因此业务数量不影响副本上限；副本上限是
+  Worker ID 池容量 `2^worker-id-bit-length` = 1024。Starter 使用 Redis 租约自动分配并续租，应用无需手工配置 Worker ID，
+  但必须提供可用的 Redis 连接。
+- 因为共用 Worker ID 与序列起点，**不同业务在同一毫秒内会产出相同的 ID 序列**。本服务保证的是「业务域内唯一」：
+  同一张表内不重复，跨表允许数值相同。**不要拿两张表的 ID 做数值比较**——`RbacAccessControlService.isPrimaryAccount`
+  的 `accountId.equals(userId)` 之所以成立，正是因为身份类三表已合并到同一个生成器。
+- 租约是实例级的：**一次续租失败会同时停掉本 Pod 内全部业务**，会在下一个续租周期自愈。这与旧形态「每个业务独立租约、
+  只停该业务」不同，是隔离性上的净损失。
 - `test` Profile 默认设置 `ddd.id-generator.enabled=false`，避免普通测试连接外部 Redis；此时容器中不提供
   `GlobalIdGeneratorProvider`，需要 ID 的用例应通过 `@TestConfiguration` 提供确定性替身（见
   `cn.iantech.test.rbac.FixedGlobalIdGeneratorProvider`）。需要验证真实 ID 租约时，应使用独立集成测试 Profile 和隔离的
-  Redis 实例。
-- 每个业务的副本数不得超过 `worker-id-block-size`，否则该业务会因区间耗尽而启动失败。
+  Redis 实例（见 `IdGeneratorInstanceLeaseRedisTest`）。
+- **变更 `DDD_ID_GENERATOR_NAMESPACE`（或 `spring.application.name`）必须先停机**：新旧命名空间是两个互不知晓的池，
+  滚动期间两边可能各自租到同一个 Worker ID 而重号。
 
 ### 逐表 ID 策略
 
@@ -45,9 +53,9 @@
 
 | 表 | ID 来源 | 依据 |
 |---|---|---|
-| `rbac_account` | 生成器（`rbac-account`） | `accountId` 是跨表隔离键（`rbac_user`/`rbac_role`/`rbac_permission.account_id`），且出现在 RPC 契约 |
-| `rbac_user` | 生成器（`rbac-user`） | `RbacUserDTO.id` 与多个 Req.id 对外暴露 |
-| `customer_user` | 生成器（`customer-user`） | `CustomerUserDTO.id` 对外暴露 |
+| `rbac_account` | 生成器（`identity`） | `accountId` 是跨表隔离键（`rbac_user`/`rbac_role`/`rbac_permission.account_id`），且出现在 RPC 契约 |
+| `rbac_user` | 生成器（`identity`） | `RbacUserDTO.id` 与多个 Req.id 对外暴露；与 `rbac_account`、`customer_user` 共用序列，因为三者都会流进 `AuthSession.userId` |
+| `customer_user` | 生成器（`identity`） | `CustomerUserDTO.id` 对外暴露；同上，必须与 `rbac_user` 共用序列 |
 | `channel_credential` | 生成器（`channel-credential`） | `ChannelCredentialDTO.id` 与 4 个 Req.id 对外暴露，并被 `channel_data_scope.channel_id` 引用 |
 | Auth Session/Family | 生成器（`auth-session`） | 纯应用生成标识，只存 Redis，没有数据库行 |
 | `channel_data_scope` | **数据库自增** | 从属数据：ID 不出服务、无表引用、无按 ID 查询，领域模型 `ChannelDataScope` 是 record 且不含自身 ID |
@@ -127,7 +135,7 @@ k8s 清单位于 `ian-ddd-auth/docs/dev-ops/k8s/`（原生 YAML：Deployment / S
 - **认证服务不暴露 HTTP**：`spring-boot-starter-web` 只在 `-Phttp` 下引入且默认不激活，`application.yml` 的
   `server.port: 8091` 从不被监听；k8s 探针与 Service 都指向 Dubbo 20880，不要按 8091 配探针或端口映射。
 - Dubbo 由 Nacos 完成发现：Provider 注册 podIP:20880，网关直连，不需要 `DUBBO_IP_TO_REGISTER`，也不需要 headless Service。
-- 副本上限：`ddd.id-generator.worker-id-block-size=64` 要求每个业务的副本数不超过该值，HPA 上限取 8。
+- 副本上限：Worker ID 池容量 `2^worker-id-bit-length` = 1024（一个 Pod 只占一个 Worker ID），HPA 上限取 8。
 - `docs/dev-ops/**` 在 `.gitignore` 中按目录白名单放行，新增子目录需同步补 `!` 规则；真实 Secret 只允许以命令式创建，不入库。
 
 ## 覆盖率

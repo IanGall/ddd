@@ -30,6 +30,7 @@ class IdGeneratorFactoryTest {
         when(redisService.executeLongScript(anyString(), anyList(), anyList()))
                 .thenAnswer(invocation -> invocation.<String>getArgument(0).contains("INCR") ? 5L : 1L);
         properties = new IdGeneratorProperties();
+        properties.setNamespace("ddd-global-id");
     }
 
     @Test
@@ -40,8 +41,9 @@ class IdGeneratorFactoryTest {
 
             ArgumentCaptor<List<?>> argumentsCaptor = ArgumentCaptor.forClass(List.class);
             verify(redisService).executeLongScript(anyString(), anyList(), argumentsCaptor.capture());
-            assertThat(argumentsCaptor.getValue().get(0)).isEqualTo(0);
-            assertThat(argumentsCaptor.getValue().get(1)).isEqualTo(properties.workerPoolSize());
+            assertThat(argumentsCaptor.getValue().get(0)).isEqualTo(properties.workerPoolSize());
+            assertThat(argumentsCaptor.getValue().get(3)).isEqualTo("10");
+            assertThat(argumentsCaptor.getValue().get(4)).isEqualTo(0);
         } finally {
             close(generator);
         }
@@ -49,7 +51,7 @@ class IdGeneratorFactoryTest {
 
     @Test
     void shouldBuildProviderResolvingDeclaredBusinessAndRejectingUnknownOne() {
-        properties.setBusinesses(Map.of("order", 0));
+        properties.setBusinesses(Map.of("order", 12));
 
         GlobalIdGeneratorProvider provider = IdGeneratorFactory.perBusiness(redisService, properties);
         try {
@@ -57,10 +59,11 @@ class IdGeneratorFactoryTest {
             assertThat(orderGenerator.nextId()).isPositive();
             assertThat(provider.forBusiness("order")).isSameAs(orderGenerator);
 
+            // 全部业务共用一个实例级 Worker ID：只应有一次取租约调用
             ArgumentCaptor<List<?>> argumentsCaptor = ArgumentCaptor.forClass(List.class);
-            verify(redisService).executeLongScript(anyString(), anyList(), argumentsCaptor.capture());
-            assertThat(argumentsCaptor.getValue().get(0)).isEqualTo(properties.blockStart(0));
-            assertThat(argumentsCaptor.getValue().get(1)).isEqualTo(properties.getWorkerIdBlockSize());
+            verify(redisService, times(1)).executeLongScript(anyString(), anyList(), argumentsCaptor.capture());
+            assertThat(argumentsCaptor.getValue().get(0)).isEqualTo(properties.workerPoolSize());
+            assertThat(argumentsCaptor.getValue().get(4)).isEqualTo(1);
 
             assertThatThrownBy(() -> provider.forBusiness("unknown"))
                     .isInstanceOf(IdGenerationException.class)

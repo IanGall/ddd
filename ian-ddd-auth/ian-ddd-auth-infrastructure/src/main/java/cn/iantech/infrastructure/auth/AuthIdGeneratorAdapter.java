@@ -7,7 +7,7 @@ import cn.iantech.infrastructure.id.AuthIdBusiness;
 import org.springframework.stereotype.Component;
 
 /**
- * 使用基础 Starter 为 Auth 会话生成全局唯一 ID。
+ * 使用基础 Starter 为 Auth 会话生成 ID（会话域内唯一，见 {@link AuthIdBusiness} 的划界判据）。
  */
 @Component
 public class AuthIdGeneratorAdapter implements IAuthIdGenerator {

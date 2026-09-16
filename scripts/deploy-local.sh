@@ -316,7 +316,7 @@ load_config() {
   resolve KAFKA_BOOTSTRAP_SERVERS "kafka.infra.svc.cluster.local:9092"
   # 本地 infra 的 Kafka 通告地址是 kafka:9092，跨命名空间解析不了；默认关掉降噪
   resolve KAFKA_ENABLED "false"
-  resolve DDD_ID_GENERATOR_NAMESPACE "ddd-global-id"
+  resolve DDD_ID_GENERATOR_NAMESPACE "ian-ddd-auth-boot"
   resolve CHANNEL_ENCRYPTION_KEY_ID "dev-key-v1"
   resolve IMAGE_PREFIX "system"
   resolve MYSQL_USERNAME ""

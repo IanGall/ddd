@@ -67,8 +67,9 @@ mvn verify
 Starter 在容器中存在 `RedissonClient` 时自动提供 `cn.iantech.redis.IRedisService`。业务可以声明自己的
 `IRedisService` Bean 覆盖默认实现；公共接口不会暴露 Redisson 的锁、队列、脚本等客户端类型。
 
-需要将同一全局用户的多个 Key 固定到一个 Redis Cluster slot 时，使用 `RedisKeyBuilder.scope(userId)`。生成的 Hash Tag 为
-`{userId}`；业务不得自行拼接花括号，也不得把非全局唯一的局部 ID 用作用户作用域。
+需要将同一用户的多个 Key 固定到一个 Redis Cluster slot 时，使用 `RedisKeyBuilder.scope(userId)`。生成的 Hash Tag 为
+`{userId}`；业务不得自行拼接花括号。传给它的 ID 必须在该 Key 命名空间内唯一——相同的作用域值会让两批 Key 落到同一个
+Hash Tag 上从而互相覆盖，所以**跨表复用的标识字段（如 auth 的 `userId`）必须由同一个生成器业务产出**（见下节划界判据）。
 
 ### 全局唯一 ID
 
@@ -81,19 +82,41 @@ Starter 在容器中存在 `RedissonClient` 时自动提供 `cn.iantech.redis.IR
 </dependency>
 ```
 
-Starter 复用应用现有的 `RedissonClient`，通过 Redis 租约在同一命名空间内自动分配 WorkerId，无需为 Pod、容器或物理机
-手工配置机器号。ID 布局为「时间戳 41 位 + WorkerId 10 位 + 序列 12 位」，算法实现内置于本 Starter，不再引入第三方
-ID 生成库。
+Starter 复用应用现有的 `RedissonClient`，通过 Redis 租约在**服务级命名空间内**自动分配 WorkerId，无需为 Pod、容器或
+物理机手工配置机器号。ID 布局为
+`((时间戳 - 基础时间) << (workerIdBitLength + sequenceBitLength)) + (workerId << sequenceBitLength) + 序列`，
+算法实现内置于本 Starter，不再引入第三方 ID 生成库。
+
+#### WorkerId 是实例级资源
+
+**一个应用实例只租用一个 WorkerId，实例内所有业务共用它。**
+
+| 约束 | 取值 |
+|---|---|
+| 业务（生成器）数量 | 无上限，只取决于声明了多少业务 |
+| 实例（副本）数量上限 | `2^workerIdBitLength`（默认 1024） |
+| 单个业务每毫秒产出 | `2^sequenceBitLength`（默认 4096） |
+
+因为共用同一个 WorkerId 与同一套序列起点，**不同业务在同一毫秒内会产出完全相同的 ID 序列**。所以本 Starter 保证的是
+**「业务域内唯一」**：同一张表内不重复，跨业务表允许数值相同。需要跨表比较 ID 的场景必须靠业务类型区分，不能靠数值比较。
+
+#### 划界判据：ID 是否会流入同一个字段
+
+这是划分业务的唯一判据。凡是可能出现在同一个字段、同一列或同一个 Redis 作用域里的 ID，**必须由同一个业务生成器产出**，
+否则它们的数值会重复。例如 auth 的 `rbac_account` / `rbac_user` / `customer_user` 的 ID 都会流进 `AuthSession.userId`
+（再由 `userType` 分派），因此合并为单个 `identity` 业务。
+
+不满足这条判据时**不要合并**：合并会共享序列与位宽配置，牺牲吞吐与独立调优能力。
 
 #### 单生成器模式（默认）
 
-不声明 `businesses` 时保持原行为：整个进程共用一个生成器，WorkerId 从整个池中租用。
+不声明 `businesses` 时整个进程共用一个生成器，WorkerId 仍从整个池中租用。
 
 ```yaml
 ddd:
   id-generator:
     enabled: true
-    namespace: ddd-global-id
+    namespace: ian-ddd-auth          # 省略则由 spring.application.name 派生
     worker-id-bit-length: 10
     sequence-bit-length: 12
     lease-duration: 30s
@@ -121,26 +144,23 @@ public class OrderIdService {
 
 #### 多业务模式
 
-按业务声明 WorkerId 区间后，每个业务得到**独立的生成器实例**（独立锁、独立序列、独立续租），互不影响：
-某个业务的租约续期失败只会让该业务停发。
+声明 `businesses` 后，每个业务得到**独立的生成器实例**（独立锁、独立序列），并可以各自配置序列位宽：
 
 ```yaml
 ddd:
   id-generator:
     enabled: true
-    namespace: ddd-global-id
     worker-id-bit-length: 10
-    sequence-bit-length: 12
+    sequence-bit-length: 12       # 单生成器模式使用；多业务模式下是未声明位宽时的回退值
     lease-duration: 30s
     renew-interval: 10s
-    worker-id-block-size: 64
     businesses:
-      order: 0
-      user: 1
+      identity: 12
+      auth-session: 12
+      channel-credential: 8
 ```
 
-块序号 `i` 占用 WorkerId 区间 `[i * worker-id-block-size, (i + 1) * worker-id-block-size)`：上例中 `order` 为
-`[0, 64)`、`user` 为 `[64, 128)`。业务通过 Provider 取生成器：
+映射的**值是该业务的 `sequenceBitLength`**（不再是块序号）。业务通过 Provider 取生成器：
 
 ```java
 import cn.iantech.id.GlobalIdGenerator;
@@ -178,38 +198,51 @@ public class OrderRepository {
 
 两点补充：
 
-- **按表选择，不是按配置选择**。生成器是进程级基础设施：服务里只要有表需要，就保持 `enabled=true` 并声明对应业务块；一张表都不需要时才
-  设 `enabled=false`（此时容器中不提供 `GlobalIdGenerator` 与 `GlobalIdGeneratorProvider`，也不占 Redis WorkerId）。
-- 分片表如果要保留自增主键，必须另设业务唯一键承担全局唯一（自增只在单个分片内唯一）。
+- **按表选择，不是按配置选择**。生成器是进程级基础设施：服务里只要有表需要，就保持 `enabled=true` 并按划界判据声明业务；
+  一张表都不需要时才设 `enabled=false`（此时容器中不提供 `GlobalIdGenerator` 与 `GlobalIdGeneratorProvider`，也不占 Redis WorkerId）。
+- 分片表如果要保留自增主键，必须另设业务唯一键承担唯一性（自增只在单个分片内唯一）。
 
 配置约束：
 
-- `worker-id-bit-length` 默认使用 10 位，同一 `namespace` 下的 WorkerId 池共 1024 个，多业务模式按块切分该池。
-- `namespace` 不能包含空白、花括号或冒号。默认 Redis Key 使用 `{ddd-global-id}:worker:cursor`、
-  `{ddd-global-id}:worker:layout` 和 `{ddd-global-id}:worker:lease:<workerId>` 格式；多业务模式额外使用
-  `{ddd-global-id}:worker:cursor:<块序号>`，而 `layout` 与 `lease` 键由所有业务共享。花括号内的 namespace 作为 Redis
-  Cluster Hash Tag，确保租约脚本涉及的 Key 位于同一 Slot。
-- `worker-id-bit-length` 与 `sequence-bit-length` 之和必须等于 22；默认 10/12 用满可用位数，在实例容量与单实例吞吐之间取得平衡。
-- 业务名只允许小写字母、数字与连字符且以字母开头；块序号不得为负、不得重复，且
-  `(最大块序号 + 1) * worker-id-block-size` 不得超过 WorkerId 池容量。
+- `worker-id-bit-length` 默认 10 位，可并存的实例（副本）数 = `2^workerIdBitLength`（默认 1024）。**它与业务数量无关**，
+  因为一个实例只占一个 WorkerId。
+- `namespace` 未显式配置时取 `spring.application.name`，两者都取不到则启动失败。不同服务因此天然落在各自的池里。
+- `worker-id-bit-length + 每个业务的 sequence-bit-length` 不得超过 22（= `long` 可用的 63 位减去时间戳预留的 41 位）。
+  未声明 `businesses` 时按全局 `sequence-bit-length` 判断同样约束。
+- 业务名只允许小写字母、数字与连字符且以字母开头；每个业务必须显式声明序列位宽，取值 3..21。
+- `namespace` 不能包含空白、花括号或冒号。Redis 键布局：
+  | 键 | 值 | 含义 |
+  |---|---|---|
+  | `{ns}:worker:cursor` | 整数 | 整池轮转游标 |
+  | `{ns}:worker:pool` | `workerIdBitLength` | 服务级守卫：WorkerId 的数值空间 |
+  | `{ns}:worker:layout:<业务>` | `workerIdBitLength:sequenceBitLength` | 业务级守卫：该业务表的 ID 位布局 |
+  | `{ns}:worker:lease:<workerId>` | 持有者令牌 | 独占仲裁 |
+
+  花括号内的 namespace 作为 Redis Cluster Hash Tag，确保租约脚本涉及的 Key 位于同一 Slot。
 - `businesses` **只能写在 YAML 中**：映射键没有单一属性名，用环境变量覆盖会得到 `AUTH_SESSION` 这类大写键从而绑定不上，
   因此业务名的严格校验会把这种写法变成启动期错误。
 - `renew-interval` 必须小于 `lease-duration`。实例会在租约有效期内续约，正常关闭时主动释放 WorkerId。
-- 所有需要保证 ID 全局唯一的实例必须连接同一个 Redis，并使用相同的 `namespace` 和位长配置。不同系统应使用不同
-  `namespace`，避免互相占用 WorkerId。
 - 生产环境可以通过 `DDD_ID_GENERATOR_NAMESPACE`、`DDD_ID_GENERATOR_LEASE_DURATION` 和
   `DDD_ID_GENERATOR_RENEW_INTERVAL` 等环境变量覆盖 Spring Boot 配置。
-- Redis 不可用、WorkerId 已耗尽、租约丢失或续约失败时，生成器会严格停发并抛出异常，不会退化为本地默认机器号，防止生成重复
+- Redis 不可用、池已耗尽、租约丢失或续约失败时，生成器会严格停发并抛出异常，不会退化为本地默认机器号，防止生成重复
   ID。调用方不得吞掉异常后自行生成替代 ID。
 - 设置 `ddd.id-generator.enabled=false` 会关闭自动装配；关闭后容器中不提供 `GlobalIdGenerator` 与
   `GlobalIdGeneratorProvider`，需要 ID 的测试应自行提供确定性替身。
 
-业务区间的边界与发布注意事项：
+#### 租约失效的爆炸半径
 
-- ID 的真实唯一性由 Redis 租约（`SET NX`）保证，**业务区间只是软预留**：任何仍按整个池扫描的参与者（未升级的实例、
-  共用同一 `namespace` 的其它服务）都可能占用区间内的 WorkerId。区间带来的是容量可预期与扫描局部性。
-- 从单生成器模式切到多业务模式不会产生重复 ID，但可能出现「区间被占满导致启动失败」。因此
-  `worker-id-block-size` 必须显著大于单个业务的副本数，且不要为已有服务更换 `namespace`——新旧 `namespace` 下相同编号的
-  WorkerId 可被两个实例同时持有，位宽与基础时间相同时必然重复。
-- 调整 `worker-id-bit-length` / `sequence-bit-length` 会改变 ID 布局，`layout` 键会让旧实例失败关闭而不是重复发号；
-  这类变更需要先完全停机再发布。
+租约是实例级的，因此**一次续租失败会同时停掉该实例内的全部业务**。对比「每个业务各持一个租约」的旧形态，这是隔离性上的
+净损失：那边只停一个业务，这里全停。续租失败只打一条 WARN，并在下一个续租周期自动重试，因此 Redis 抖动或重启后可自愈。
+
+#### 哪些变更不能滚动发布
+
+| 变更 | 为什么必须停机 |
+|---|---|
+| `namespace` | 新旧命名空间是两个互不知晓的池，滚动期间两边可能各自租到同一个 WorkerId；位宽与基础时间相同时**必然重复** |
+| 已声明业务的 `sequence-bit-length` | 会改变该业务表 ID 的位布局，业务级守卫让新实例 fail-closed |
+| `worker-id-bit-length` | 会改变 WorkerId 数值空间，服务级守卫让新实例 fail-closed |
+
+**新增业务是可以滚动发布的**：只写入新的业务级 `layout` 键，老实例从不读取它。
+
+三级守卫（服务级 `pool`、业务级 `layout`、`lease` 排他）都只会让实例失败关闭，不会产生重复 ID。`namespace` 的冷切换
+做完后，新命名空间天然是空的，因此切换过程本身是安全的；回退只需把 `namespace` 改回旧值并重新部署。
