@@ -2,6 +2,8 @@ package cn.iantech.infrastructure.persistent.po;
 
 import cn.iantech.common.model.BasePO;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
+import cn.iantech.mysql.annotation.IdGenerator;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,6 +19,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @AutoMapper(target = ChannelCredentialEntity.class, reverseConvertGenerate = true)
+@IdGenerator(AuthIdBusiness.CHANNEL_CREDENTIAL)
 public class ChannelCredentialPO extends BasePO {
     private String channelCode;
     private String channelName;

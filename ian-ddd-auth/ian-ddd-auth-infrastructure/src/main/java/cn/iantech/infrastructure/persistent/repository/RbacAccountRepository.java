@@ -3,9 +3,6 @@ package cn.iantech.infrastructure.persistent.repository;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.rbac.infra.IRbacAccountRepository;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
-import cn.iantech.id.GlobalIdGenerator;
-import cn.iantech.id.GlobalIdGeneratorProvider;
-import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.IRbacAccountDao;
 import cn.iantech.infrastructure.persistent.po.RbacAccountPO;
 import io.github.linpeilie.Converter;
@@ -21,19 +18,18 @@ public class RbacAccountRepository implements IRbacAccountRepository {
 
     private final IRbacAccountDao accountDao;
     private final Converter converter;
-    private final GlobalIdGenerator globalIdGenerator;
 
-    public RbacAccountRepository(IRbacAccountDao accountDao, Converter converter,
-                                GlobalIdGeneratorProvider idGeneratorProvider) {
+    public RbacAccountRepository(IRbacAccountDao accountDao, Converter converter) {
         this.accountDao = accountDao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.IDENTITY.businessName());
     }
 
+    /**
+     * 主键由 {@code RbacAccountPO} 上的 {@code @IdGenerator} 注解在 insert 时填充。
+     */
     @Override
     public RbacAccountEntity save(RbacAccountEntity entity) {
         RbacAccountPO item = converter.convert(entity, RbacAccountPO.class);
-        item.setId(globalIdGenerator.nextId());
         try {
             accountDao.insert(item);
         } catch (DuplicateKeyException exception) {

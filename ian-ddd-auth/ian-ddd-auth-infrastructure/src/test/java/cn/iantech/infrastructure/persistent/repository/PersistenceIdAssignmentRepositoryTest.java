@@ -4,10 +4,10 @@ import cn.iantech.domain.channel.model.ChannelCredentialEntity;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
-import cn.iantech.id.GlobalIdGenerator;
-import cn.iantech.id.GlobalIdGeneratorProvider;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.*;
 import cn.iantech.infrastructure.persistent.po.*;
+import cn.iantech.mysql.annotation.IdGenerator;
 import io.github.linpeilie.Converter;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,112 +19,92 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.*;
 
+/**
+ * 主键赋值已从 Repository 内联搬到持久化对象的 {@code @IdGenerator} 注解 + insert 拦截器，
+ * 本测试锁两件事：Repository 不再赋 id，以及哪些表声明了注解、哪些没有。
+ *
+ * <p>「注解 → 拦截器 → 落库」这条链路由 ddd-mysql-starter 的
+ * {@code IdAutoFillMybatisIntegrationTest}（真实 MyBatis + H2）与
+ * {@code RbacServiceMysqlTest}（真实 MySQL）覆盖，这里不做重复验证。
+ */
 class PersistenceIdAssignmentRepositoryTest {
 
-    /** 各业务共用同一个假生成器，本用例只关心「保存前先取 ID」的时序。 */
-    private static GlobalIdGeneratorProvider providerOf(GlobalIdGenerator generator) {
-        return new GlobalIdGeneratorProvider() {
-            @Override
-            public GlobalIdGenerator forBusiness(String business) {
-                return generator;
-            }
-
-            @Override
-            public void close() {
-            }
-        };
-    }
-
     @Test
-    void shouldGenerateIdBeforeSavingRbacAccount() {
+    void shouldNotAssignIdInRbacAccountRepository() {
         IRbacAccountDao dao = mock(IRbacAccountDao.class);
         Converter converter = mock(Converter.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
         RbacAccountEntity entity = RbacAccountEntity.builder().username("admin").build();
         RbacAccountPO po = new RbacAccountPO();
-        RbacAccountEntity saved = RbacAccountEntity.builder().id(101L).username("admin").build();
         when(converter.convert(same(entity), eq(RbacAccountPO.class))).thenReturn(po);
-        when(converter.convert(same(po), eq(RbacAccountEntity.class))).thenReturn(saved);
-        when(generator.nextId()).thenReturn(101L);
 
-        RbacAccountEntity result = new RbacAccountRepository(dao, converter, providerOf(generator)).save(entity);
+        new RbacAccountRepository(dao, converter).save(entity);
 
-        assertEquals(101L, po.getId());
-        assertEquals(101L, result.getId());
+        assertNull(po.getId(), "主键由 insert 时的拦截器填充，Repository 不再赋 id");
         verify(dao).insert(same(po));
     }
 
     @Test
-    void shouldReplaceProvidedRbacAccountIdWithGlobalId() {
-        IRbacAccountDao dao = mock(IRbacAccountDao.class);
-        Converter converter = mock(Converter.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
-        RbacAccountEntity entity = RbacAccountEntity.builder().id(99L).build();
-        RbacAccountPO po = new RbacAccountPO();
-        po.setId(99L);
-        RbacAccountEntity saved = RbacAccountEntity.builder().id(105L).build();
-        when(converter.convert(same(entity), eq(RbacAccountPO.class))).thenReturn(po);
-        when(converter.convert(same(po), eq(RbacAccountEntity.class))).thenReturn(saved);
-        when(generator.nextId()).thenReturn(105L);
-
-        new RbacAccountRepository(dao, converter, providerOf(generator)).save(entity);
-
-        assertEquals(105L, po.getId());
-        verify(generator).nextId();
-    }
-
-    @Test
-    void shouldGenerateIdBeforeSavingRbacUser() {
+    void shouldNotAssignIdInRbacUserRepository() {
         IRbacUserDao dao = mock(IRbacUserDao.class);
         Converter converter = mock(Converter.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
         RbacUserEntity entity = RbacUserEntity.builder().username("operator").build();
         RbacUserPO po = new RbacUserPO();
-        RbacUserEntity saved = RbacUserEntity.builder().id(102L).accountId(10L).build();
         when(converter.convert(same(entity), eq(RbacUserPO.class))).thenReturn(po);
-        when(converter.convert(same(po), eq(RbacUserEntity.class))).thenReturn(saved);
-        when(generator.nextId()).thenReturn(102L);
 
-        new RbacUserRepository(dao, converter, providerOf(generator)).save(10L, entity);
+        new RbacUserRepository(dao, converter).save(10L, entity);
 
-        assertEquals(102L, po.getId());
+        assertNull(po.getId(), "主键由 insert 时的拦截器填充，Repository 不再赋 id");
         assertEquals(10L, po.getAccountId());
         verify(dao).insert(same(po));
     }
 
     @Test
-    void shouldGenerateIdBeforeSavingCustomerUser() {
+    void shouldNotAssignIdInCustomerUserRepository() {
         ICustomerUserDao dao = mock(ICustomerUserDao.class);
         Converter converter = mock(Converter.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
         CustomerUserEntity entity = CustomerUserEntity.builder().loginName("customer").build();
         CustomerUserPO po = new CustomerUserPO();
-        CustomerUserEntity saved = CustomerUserEntity.builder().id(103L).loginName("customer").build();
         when(converter.convert(same(entity), eq(CustomerUserPO.class))).thenReturn(po);
-        when(converter.convert(same(po), eq(CustomerUserEntity.class))).thenReturn(saved);
-        when(generator.nextId()).thenReturn(103L);
 
-        new CustomerUserRepository(dao, converter, providerOf(generator)).save(entity);
+        new CustomerUserRepository(dao, converter).save(entity);
 
-        assertEquals(103L, po.getId());
+        assertNull(po.getId(), "主键由 insert 时的拦截器填充，Repository 不再赋 id");
         verify(dao).insert(same(po));
     }
 
     @Test
-    void shouldGenerateIdBeforeSavingChannelCredential() {
+    void shouldNotAssignIdInChannelCredentialRepositoryAndReadBackWhatInterceptorWrote() {
         IChannelCredentialDao dao = mock(IChannelCredentialDao.class);
         Converter converter = mock(Converter.class);
-        GlobalIdGenerator generator = mock(GlobalIdGenerator.class);
         ChannelCredentialEntity entity = ChannelCredentialEntity.builder().channelCode("channel").build();
         ChannelCredentialPO po = new ChannelCredentialPO();
         when(converter.convert(same(entity), eq(ChannelCredentialPO.class))).thenReturn(po);
-        when(generator.nextId()).thenReturn(104L);
+        // 拦截器在 insert 期间把 id 写进 PO，Repository 负责回读给领域对象
+        doAnswer(invocation -> {
+            po.setId(104L);
+            return 1;
+        }).when(dao).insert(same(po));
 
-        ChannelCredentialEntity result = new ChannelCredentialRepository(dao, converter, providerOf(generator)).save(entity);
+        ChannelCredentialEntity result = new ChannelCredentialRepository(dao, converter).save(entity);
 
-        assertEquals(104L, po.getId());
         assertEquals(104L, result.getId());
-        verify(dao).insert(same(po));
+    }
+
+    @Test
+    void shouldDeclareIdentityBusinessOnSharedIdentityEntities() {
+        // 这三张表的 id 都会流进 AuthSession.userId，必须共用一个序列
+        assertEquals(AuthIdBusiness.IDENTITY, businessOf(RbacAccountPO.class));
+        assertEquals(AuthIdBusiness.IDENTITY, businessOf(RbacUserPO.class));
+        assertEquals(AuthIdBusiness.IDENTITY, businessOf(CustomerUserPO.class));
+        assertEquals(AuthIdBusiness.CHANNEL_CREDENTIAL, businessOf(ChannelCredentialPO.class));
+    }
+
+    @Test
+    void shouldNotDeclareIdGeneratorOnAutoIncrementEntities() {
+        assertNull(businessOf(RbacRolePO.class), "rbac_role 用数据库自增");
+        assertNull(businessOf(RbacPermissionPO.class), "rbac_permission 用数据库自增");
+        assertNull(businessOf(ChannelDataScopePO.class), "channel_data_scope 用数据库自增");
+        assertNull(businessOf(UserOrderPO.class), "分片表 user_order 必须保留自增主键");
     }
 
     @Test
@@ -148,5 +128,10 @@ class PersistenceIdAssignmentRepositoryTest {
             assertTrue(item.getStatus());
             assertFalse(item.getDeleted());
         });
+    }
+
+    private static String businessOf(Class<?> type) {
+        IdGenerator annotation = type.getAnnotation(IdGenerator.class);
+        return annotation == null ? null : annotation.value();
     }
 }

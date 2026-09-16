@@ -22,6 +22,7 @@
         <module>ddd-context</module>
         <module>ddd-redis-starter</module>
         <module>ddd-id-generator-starter</module>
+        <module>ddd-mysql-starter</module>
         <module>ddd-test-starter</module>
         <module>ddd-dependencies</module>
         <module>ddd-base-bom</module>

@@ -2,9 +2,6 @@ package cn.iantech.infrastructure.persistent.repository;
 
 import cn.iantech.domain.channel.infra.IChannelCredentialRepository;
 import cn.iantech.domain.channel.model.ChannelCredentialEntity;
-import cn.iantech.id.GlobalIdGenerator;
-import cn.iantech.id.GlobalIdGeneratorProvider;
-import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.IChannelCredentialDao;
 import cn.iantech.infrastructure.persistent.po.ChannelCredentialPO;
 import io.github.linpeilie.Converter;
@@ -17,19 +14,19 @@ import java.util.Optional;
 public class ChannelCredentialRepository implements IChannelCredentialRepository {
     private final IChannelCredentialDao dao;
     private final Converter converter;
-    private final GlobalIdGenerator globalIdGenerator;
 
-    public ChannelCredentialRepository(IChannelCredentialDao dao, Converter converter,
-                                      GlobalIdGeneratorProvider idGeneratorProvider) {
+    public ChannelCredentialRepository(IChannelCredentialDao dao, Converter converter) {
         this.dao = dao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.CHANNEL_CREDENTIAL.businessName());
     }
 
+    /**
+     * 主键由 {@code ChannelCredentialPO} 上的 {@code @IdGenerator} 注解在 insert 时填充，
+     * 插入后回读同一个 PO 拿到 id。
+     */
     @Override
     public ChannelCredentialEntity save(ChannelCredentialEntity entity) {
         ChannelCredentialPO po = converter.convert(entity, ChannelCredentialPO.class);
-        po.setId(globalIdGenerator.nextId());
         dao.insert(po);
         entity.setId(po.getId());
         return entity;

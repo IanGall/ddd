@@ -2,6 +2,8 @@ package cn.iantech.infrastructure.persistent.po;
 
 import cn.iantech.common.model.BasePO;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
+import cn.iantech.mysql.annotation.IdGenerator;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -15,6 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @AutoMapper(target = CustomerUserEntity.class, reverseConvertGenerate = true)
+@IdGenerator(AuthIdBusiness.IDENTITY)
 public class CustomerUserPO extends BasePO {
     private String loginName;
     private String passwordHash;

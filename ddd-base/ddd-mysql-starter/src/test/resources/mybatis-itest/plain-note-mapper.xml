@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.mysql.itest.PlainNoteMapper">
+
+    <!-- 故意绑定 id 列：用来证明「是否填充」取决于类上的注解，而不是 SQL 里有没有 id -->
+    <insert id="insert" parameterType="cn.iantech.mysql.itest.PlainNotePo">
+        INSERT INTO plain_note (id, body) VALUES (#{id}, #{body})
+    </insert>
+
+    <select id="countByBody" resultType="int">
+        SELECT COUNT(*) FROM plain_note WHERE body = #{body}
+    </select>
+
+</mapper>

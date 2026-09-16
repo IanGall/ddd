@@ -12,7 +12,8 @@
 | `ddd-context/ddd-context-dubbo` | JAR      | 在 Dubbo 3 Attachment 与请求上下文之间进行转换       |
 | `ddd-context/ddd-context-web`   | JAR      | 在 Spring Web 请求边界建立、回写并清理请求上下文     |
 | `ddd-redis-starter`             | JAR      | 提供技术无关的 Redis API、Redisson 实现与自动装配    |
-| `ddd-id-generator-starter`      | JAR      | 基于 Redis 租约分配机器号并生成全局唯一的 64 位 ID   |
+| `ddd-id-generator-starter`      | JAR      | 基于 Redis 租约分配实例级 WorkerId 并生成 64 位 ID   |
+| `ddd-mysql-starter`             | JAR      | 按持久化对象上的注解在 insert 时自动填充主键         |
 | `ddd-dependencies`              | BOM      | 统一第三方依赖版本，供基础 BOM 导入                  |
 | `ddd-base-bom`                  | BOM      | 汇总第三方依赖版本及基础组件版本                     |
 
@@ -200,6 +201,8 @@ public class OrderRepository {
 
 - **按表选择，不是按配置选择**。生成器是进程级基础设施：服务里只要有表需要，就保持 `enabled=true` 并按划界判据声明业务；
   一张表都不需要时才设 `enabled=false`（此时容器中不提供 `GlobalIdGenerator` 与 `GlobalIdGeneratorProvider`，也不占 Redis WorkerId）。
+- **声明方式**：在持久化对象上标 `@IdGenerator`，主键由 insert 拦截器自动填充，不必在 Repository 里手写
+  `setId(generator.nextId())`。详见下文「MySQL Starter」。
 - 分片表如果要保留自增主键，必须另设业务唯一键承担唯一性（自增只在单个分片内唯一）。
 
 配置约束：
@@ -246,3 +249,64 @@ public class OrderRepository {
 
 三级守卫（服务级 `pool`、业务级 `layout`、`lease` 排他）都只会让实例失败关闭，不会产生重复 ID。`namespace` 的冷切换
 做完后，新命名空间天然是空的，因此切换过程本身是安全的；回退只需把 `namespace` 改回旧值并重新部署。
+
+### MySQL Starter：在 insert 时填充主键
+
+需要在插入前就有主键的表用 `ddd-mysql-starter`：在持久化对象上标一个注解，主键就由 insert 拦截器自动填充，
+不必在 Repository 里手写 `setId(generator.nextId())`。
+
+```xml
+<dependency>
+    <groupId>cn.iantech</groupId>
+    <artifactId>ddd-mysql-starter</artifactId>
+</dependency>
+```
+
+```java
+import cn.iantech.mysql.annotation.IdGenerator;
+
+@IdGenerator(AuthIdBusiness.IDENTITY)   // 业务名须与 ddd.id-generator.businesses 的键一致
+public class RbacUserPO extends BasePO {
+    // id 仍声明在 BasePO 里
+}
+```
+
+**注解打在类上而不是 id 字段上**：本项目的 id 声明在共享基类 `BasePO` 里，字段级注解无法按表区分；
+类级注解还让「这张表用不用生成器」可以直接 grep。
+
+三条行为约定：
+
+- **未注解的类一律不碰**，因此自增主键表的既有行为完全不变（含 `useGeneratedKeys` 回填）。
+- **仅在 `id` 为 null 时生成**：调用方显式传入的 id 不被覆盖，重试同一个对象也不会重复消耗号段。
+- 注解了但 INSERT 未绑定 id 列时**打 WARN 并跳过填充**：这种情况下填进去的值根本不会落库，
+  跳过比填充更诚实，也避免在内存里造成「id 已生成」的假象。
+
+`value` 可以留空，表示走单生成器模式的 `GlobalIdGenerator`（适用于未声明 `businesses` 的服务）：
+
+```java
+@IdGenerator
+public class OrderPO extends BasePO {
+}
+```
+
+关闭拦截器：设 `ddd.mysql.enabled=false`（例如纯单元测试环境）。生成器缺失时不会静默跳过，
+而是在插入时抛出带实体类与业务名的 `IdGenerationException`。
+
+#### 与分片表的关系
+
+拦截器在 MyBatis 层、JDBC 驱动**之上**，`ShardingSphereDriver` 的 SQL 改写与路由发生在它之后，
+因此**在 ShardingSphere 数据源下同样有效**（`user_order` 按 `user_id` 路由，与 id 无关）。
+
+但**分片表不应该标这个注解**。项目的 DDL 政策要求分片表保留自增主键，`ian_dev_tech_db_00.sql` 的列注释写得很直接：
+
+> 自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如 order_id，会导致 innodb 内部 page 分裂和大量随机 I/O，性能下降】
+
+所以 `user_order_0..3` 保持自增、不加注解，全局唯一继续由 `order_id`/`uuid` 承担。
+**`@IdGenerator` 的适用范围是「单库非分片表」。**
+
+也不要与 ShardingSphere 自带的 `keyGenerateStrategy` 同时用于一张表：两套主键生成机制并存会让
+「id 从哪来」变得不可判定。
+
+> **已知隐患（未修）**：`user_order_mapper.xml` 用 `<select id="insert">` 承载 INSERT，命令类型因此是 `SELECT`，
+> `useGeneratedKeys` 用不上、也拿不到受影响行数。它能跑只是因为 MyBatis 走 select 路径执行后丢弃结果；
+> 任何按 `SqlCommandType` 判断的增强（包括本拦截器）都会静默跳过它。

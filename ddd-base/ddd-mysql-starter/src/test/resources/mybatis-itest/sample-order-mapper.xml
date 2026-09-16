@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iantech.mysql.itest.SampleOrderMapper">
+
+    <insert id="insert" parameterType="cn.iantech.mysql.itest.SampleOrderPo">
+        INSERT INTO sample_order (id, name) VALUES (#{id}, #{name})
+    </insert>
+
+    <select id="findNameById" resultType="java.lang.String">
+        SELECT name FROM sample_order WHERE id = #{id}
+    </select>
+
+</mapper>

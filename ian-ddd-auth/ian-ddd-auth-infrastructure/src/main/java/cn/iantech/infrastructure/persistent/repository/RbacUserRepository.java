@@ -3,9 +3,6 @@ package cn.iantech.infrastructure.persistent.repository;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.rbac.infra.IRbacUserRepository;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
-import cn.iantech.id.GlobalIdGenerator;
-import cn.iantech.id.GlobalIdGeneratorProvider;
-import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.IRbacUserDao;
 import cn.iantech.infrastructure.persistent.po.RbacUserPO;
 import io.github.linpeilie.Converter;
@@ -23,20 +20,19 @@ public class RbacUserRepository implements IRbacUserRepository {
 
     private final IRbacUserDao rbacUserDao;
     private final Converter converter;
-    private final GlobalIdGenerator globalIdGenerator;
 
-    public RbacUserRepository(IRbacUserDao rbacUserDao, Converter converter,
-                             GlobalIdGeneratorProvider idGeneratorProvider) {
+    public RbacUserRepository(IRbacUserDao rbacUserDao, Converter converter) {
         this.rbacUserDao = rbacUserDao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.IDENTITY.businessName());
     }
 
+    /**
+     * 主键由 {@code RbacUserPO} 上的 {@code @IdGenerator} 注解在 insert 时填充。
+     */
     @Override
     public RbacUserEntity save(Long accountId, RbacUserEntity entity) {
         RbacUserPO rbacUserPO = converter.convert(entity, RbacUserPO.class);
         rbacUserPO.setAccountId(accountId);
-        rbacUserPO.setId(globalIdGenerator.nextId());
         LocalDateTime now = LocalDateTime.now();
         rbacUserPO.setCreateTime(now);
         rbacUserPO.setUpdateTime(now);

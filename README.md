@@ -14,6 +14,7 @@ ddd/
 │   ├── ddd-context/               # 协议无关请求上下文：core / dubbo / web 适配
 │   ├── ddd-redis-starter/         # 技术无关 Redis API 与 Redisson 自动装配
 │   ├── ddd-id-generator-starter/  # Redis 租约分配实例级 WorkerId（业务各持生成器实例）+ 全局唯一 64 位 ID
+│   ├── ddd-mysql-starter/         # 按持久化对象上的 @IdGenerator 在 insert 时自动填充主键
 │   ├── ddd-dependencies/          # 第三方依赖版本 BOM
 │   ├── ddd-base-bom/              # 汇总 BOM（第三方 + 基础组件 + 契约版本）
 │   └── ian-ddd-coverage/          # 分布式 E2E 覆盖率基础设施

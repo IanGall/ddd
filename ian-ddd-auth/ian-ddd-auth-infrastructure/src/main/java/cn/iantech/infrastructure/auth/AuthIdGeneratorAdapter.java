@@ -15,7 +15,7 @@ public class AuthIdGeneratorAdapter implements IAuthIdGenerator {
     private final GlobalIdGenerator globalIdGenerator;
 
     public AuthIdGeneratorAdapter(GlobalIdGeneratorProvider provider) {
-        this.globalIdGenerator = provider.forBusiness(AuthIdBusiness.AUTH_SESSION.businessName());
+        this.globalIdGenerator = provider.forBusiness(AuthIdBusiness.AUTH_SESSION);
     }
 
     @Override

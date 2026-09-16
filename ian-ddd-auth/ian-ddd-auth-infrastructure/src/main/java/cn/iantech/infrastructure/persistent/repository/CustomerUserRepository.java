@@ -3,9 +3,6 @@ package cn.iantech.infrastructure.persistent.repository;
 import cn.iantech.common.exception.AppException;
 import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
-import cn.iantech.id.GlobalIdGenerator;
-import cn.iantech.id.GlobalIdGeneratorProvider;
-import cn.iantech.infrastructure.id.AuthIdBusiness;
 import cn.iantech.infrastructure.persistent.dao.ICustomerUserDao;
 import cn.iantech.infrastructure.persistent.po.CustomerUserPO;
 import io.github.linpeilie.Converter;
@@ -20,19 +17,18 @@ import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT
 public class CustomerUserRepository implements ICustomerUserRepository {
     private final ICustomerUserDao dao;
     private final Converter converter;
-    private final GlobalIdGenerator globalIdGenerator;
 
-    public CustomerUserRepository(ICustomerUserDao dao, Converter converter,
-                                 GlobalIdGeneratorProvider idGeneratorProvider) {
+    public CustomerUserRepository(ICustomerUserDao dao, Converter converter) {
         this.dao = dao;
         this.converter = converter;
-        this.globalIdGenerator = idGeneratorProvider.forBusiness(AuthIdBusiness.IDENTITY.businessName());
     }
 
+    /**
+     * 主键由 {@code CustomerUserPO} 上的 {@code @IdGenerator} 注解在 insert 时填充。
+     */
     @Override
     public CustomerUserEntity save(CustomerUserEntity entity) {
         CustomerUserPO po = converter.convert(entity, CustomerUserPO.class);
-        po.setId(globalIdGenerator.nextId());
         // customer_user.avatar 为 NOT NULL DEFAULT ''，显式赋值避免 INSERT 绑定 null 触发约束冲突
         if (po.getAvatar() == null) {
             po.setAvatar("");

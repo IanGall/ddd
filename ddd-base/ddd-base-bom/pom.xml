@@ -61,6 +61,11 @@
             </dependency>
             <dependency>
                 <groupId>cn.iantech</groupId>
+                <artifactId>ddd-mysql-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iantech</groupId>
                 <artifactId>ddd-test-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -28,6 +28,11 @@
             <groupId>cn.iantech</groupId>
             <artifactId>ddd-id-generator-starter</artifactId>
         </dependency>
+        <!-- 持久化对象的 @IdGenerator 注解与 insert 自动填主键的拦截器 -->
+        <dependency>
+            <groupId>cn.iantech</groupId>
+            <artifactId>ddd-mysql-starter</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.github.linpeilie</groupId>
             <artifactId>mapstruct-plus-spring-boot-starter</artifactId>

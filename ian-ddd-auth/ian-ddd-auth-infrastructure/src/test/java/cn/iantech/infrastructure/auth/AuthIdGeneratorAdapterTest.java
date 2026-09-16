@@ -20,7 +20,7 @@ class AuthIdGeneratorAdapterTest {
         GlobalIdGenerator sessionGenerator = mock(GlobalIdGenerator.class);
         when(sessionGenerator.nextId()).thenReturn(501L);
         GlobalIdGeneratorProvider provider = mock(GlobalIdGeneratorProvider.class);
-        when(provider.forBusiness(AuthIdBusiness.AUTH_SESSION.businessName())).thenReturn(sessionGenerator);
+        when(provider.forBusiness(AuthIdBusiness.AUTH_SESSION)).thenReturn(sessionGenerator);
 
         AuthIdGeneratorAdapter adapter = new AuthIdGeneratorAdapter(provider);
 
@@ -31,7 +31,7 @@ class AuthIdGeneratorAdapterTest {
     @Test
     void shouldPropagateUnknownBusinessFailure() {
         GlobalIdGeneratorProvider provider = mock(GlobalIdGeneratorProvider.class);
-        when(provider.forBusiness(AuthIdBusiness.AUTH_SESSION.businessName()))
+        when(provider.forBusiness(AuthIdBusiness.AUTH_SESSION))
                 .thenThrow(new IdGenerationException("未声明的业务 ID 生成器：auth-session"));
 
         IdGenerationException exception = assertThrows(IdGenerationException.class,
