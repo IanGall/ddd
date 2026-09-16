@@ -21,8 +21,10 @@
 #   --skip-build                 deploy 时跳过 Maven 与镜像构建，只刷配置并滚动
 #   --follow                     logs 时持续跟随（跟随最新的那个 Pod）
 #
-# 幂等：deploy 把「镜像 ID + 配置内容」的摘要打成 Deployment 的 Pod 模板注解，内容没变就跳过滚动更新；
-#       改代码、改 .env.local、换 profile 都会自动触发滚动，因此重复执行安全。
+# 幂等：deploy 把「镜像内容摘要（层 + 镜像配置）+ 配置内容」的摘要打成 Deployment 的 Pod 模板注解，
+#       内容没变就跳过滚动更新；改代码、改 .env.local、换 profile 都会自动触发滚动，因此重复执行安全。
+#       判据刻意不用镜像 ID：BuildKit 每次构建都会重写镜像 config 里的 created 时间戳，
+#       即使所有层命中缓存、镜像内容逐字节一致，镜像 ID 也会变（已实测），那样每次部署都会白滚一遍。
 #
 # 两个命名空间是两件独立的事（参数默认值可用环境变量覆盖，也可写进 .env.local）：
 #   · k8s 命名空间：部署到哪个集群命名空间（--k8s-namespace / NAMESPACE）
@@ -344,7 +346,16 @@ load_config() {
 sha256() {
   if command -v sha256sum >/dev/null; then sha256sum | cut -c1-16; else shasum -a 256 | cut -c1-16; fi
 }
-image_id() { docker image inspect "$1" --format '{{.Id}}' 2>/dev/null || echo missing; }
+# 镜像「内容」标识：层摘要（文件内容）+ 镜像配置（Env / Entrypoint / Cmd 等）。
+# 刻意不用镜像 ID：BuildKit 每次构建都会重写镜像 config 里的 created 时间戳，
+# 即使全部层命中缓存、镜像内容逐字节一致，镜像 ID 也会变（已实测），拿它当判据会每次白滚一遍。
+image_content_id() {
+  docker image inspect "$1" >/dev/null 2>&1 || {
+    echo missing
+    return
+  }
+  docker image inspect "$1" --format '{{json .RootFS.Layers}}|{{json .Config}}' | sha256
+}
 
 # 注册中心地址：Dubbo 的 Nacos 注册中心把 namespace 当 URL 参数解析，它同时作用于服务发现与元数据
 # （两个服务的 dubbo.registry.use-as-metadata-center 都是 true），因此只改这一处即可整链路隔离。
@@ -494,12 +505,12 @@ tune_replicas() {
   log "${prefix}：副本数设为 ${REPLICAS}（HPA minReplicas 同步；要按清单 2→8 用 --replicas keep）"
 }
 
-# 内容没变就不滚动：把「镜像 ID + 配置摘要」打成 Pod 模板注解，变了才触发滚动更新
+# 内容没变就不滚动：把「镜像内容摘要 + 配置摘要」打成 Pod 模板注解，变了才触发滚动更新
 rollout_if_changed() {
   local svc="$1" prefix image current live hash
   prefix="$(service_prefix "${svc}")"
   image="$(service_image "${svc}")"
-  current="$(image_id "${image}")"
+  current="$(image_content_id "${image}")"
   [ "${current}" != "missing" ] || die "本地没有镜像 ${image}：去掉 --skip-build 重跑，或先手工构建"
   live="$(kubectl get deploy "${prefix}" -n "${NAMESPACE}" \
     -o jsonpath='{.spec.template.metadata.annotations.deploy-local\.hash}' 2>/dev/null || true)"
