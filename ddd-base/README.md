@@ -203,7 +203,8 @@ public class OrderRepository {
   一张表都不需要时才设 `enabled=false`（此时容器中不提供 `GlobalIdGenerator` 与 `GlobalIdGeneratorProvider`，也不占 Redis WorkerId）。
 - **声明方式**：在持久化对象上标 `@IdGenerator`，主键由 insert 拦截器自动填充，不必在 Repository 里手写
   `setId(generator.nextId())`。详见下文「MySQL Starter」。
-- 分片表如果要保留自增主键，必须另设业务唯一键承担唯一性（自增只在单个分片内唯一）。
+- 分片表**不要**用分片内自增做主键：各物理表各自计数会跨分片重号。用 `@IdGenerator` 生成全局唯一主键即可
+  ——分片路由按业务键（如 `user_id`），与 id 无关。若确有原因必须保留自增主键，则必须另设业务唯一键承担全局唯一。
 
 配置约束：
 
@@ -295,18 +296,26 @@ public class OrderPO extends BasePO {
 #### 与分片表的关系
 
 拦截器在 MyBatis 层、JDBC 驱动**之上**，`ShardingSphereDriver` 的 SQL 改写与路由发生在它之后，
-因此**在 ShardingSphere 数据源下同样有效**（`user_order` 按 `user_id` 路由，与 id 无关）。
+因此**分片表同样可以用这个注解**：`user_order` 按 `user_id` 路由，与 id 无关，应用侧提前生成主键不影响路由。
 
-但**分片表不应该标这个注解**。项目的 DDL 政策要求分片表保留自增主键，`ian_dev_tech_db_00.sql` 的列注释写得很直接：
+分片表恰恰**需要**这样生成主键：`user_order_0..3` 若是分片内自增，各物理表各自计数就会跨分片重号，
+无法承担全局唯一主键。所以 `UserOrderPO` 标了 `@IdGenerator`，DDL 也去掉了 `AUTO_INCREMENT`
+（改用已有库的一次性脚本见 `ian-ddd-auth-boot/src/main/resources/sql/20260916_user_order_key_strategy_alignment.sql`）。
 
-> 自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如 order_id，会导致 innodb 内部 page 分裂和大量随机 I/O，性能下降】
+**不要启用 ShardingSphere 自带的 `keyGenerateStrategy`。** 项目用的是 `mode.type: Standalone`，而
+`StandaloneWorkerIdGenerator.generate()` 在未配置 `worker-id` 时**直接返回 0**（已反编译确认）：
 
-所以 `user_order_0..3` 保持自增、不加注解，全局唯一继续由 `order_id`/`uuid` 承担。
-**`@IdGenerator` 的适用范围是「单库非分片表」。**
+```java
+if (!props.containsKey("worker-id")) {
+    return 0;                  // Standalone 下所有实例的 snowflake workerId 都是 0
+}
+```
 
-也不要与 ShardingSphere 自带的 `keyGenerateStrategy` 同时用于一张表：两套主键生成机制并存会让
-「id 从哪来」变得不可判定。
+于是每个 Pod 的 snowflake 都从 workerId=0 起步，同一毫秒内跨 Pod 会产生完全相同的 id。
+`ddd-id-generator-starter` 正是为解决这一点而用 Redis 租约分配实例级 WorkerId；两套机制并存时
+「id 从哪来」也不可判定。若将来确实要用它，必须先为每个 Pod 配一个互不相同的 `worker-id`（0..1023）。
 
-> **已知隐患（未修）**：`user_order_mapper.xml` 用 `<select id="insert">` 承载 INSERT，命令类型因此是 `SELECT`，
-> `useGeneratedKeys` 用不上、也拿不到受影响行数。它能跑只是因为 MyBatis 走 select 路径执行后丢弃结果；
-> 任何按 `SqlCommandType` 判断的增强（包括本拦截器）都会静默跳过它。
+> **历史坑（已修）**：`user_order_mapper.xml` 曾用 `<select id="insert">` 承载 INSERT，命令类型因此是 `SELECT`，
+> `useGeneratedKeys` 用不上、也拿不到受影响行数，任何按 `SqlCommandType` 判断的增强（包括本拦截器）都会
+> **静默跳过**它。它当时能跑只是因为 MyBatis 走 select 路径执行后丢弃结果。现已改为 `<insert>`。
+> 新增 mapper 时请注意：**语句元素名决定命令类型**，写错不会报错，只会让基于命令类型的增强失效。

@@ -19,7 +19,7 @@
 - Infrastructure 默认依赖 `ddd-id-generator-starter`，业务通过构造器注入
   `cn.iantech.id.GlobalIdGeneratorProvider`，在构造期用 `forBusiness(...)` 取到本业务的生成器，调用 `nextId()` 获取
   `long` 类型全局唯一 ID。
-- 本服务声明 3 个业务，业务名与各自的序列位宽集中在 `cn.iantech.infrastructure.id.AuthIdBusiness` 与
+- 本服务声明 4 个业务，业务名与各自的序列位宽集中在 `cn.iantech.infrastructure.id.AuthIdBusiness` 与
   `application.yml` 的 `ddd.id-generator.businesses` 中，两者必须保持一致，否则启动阶段取生成器即失败：
 
   | 业务名                | sequenceBitLength | 覆盖的表 |
@@ -27,12 +27,13 @@
   | `identity`            | 12 | `rbac_account` / `rbac_user` / `customer_user` |
   | `auth-session`        | 12 | 登录会话（Redis） |
   | `channel-credential`  | 12 | `channel_credential` |
+  | `user-order`          | 12 | `user_order_0..3`（分片表） |
 
   `identity` 覆盖三张表是**划界判据**的结果：这三张表的 ID 都会流进 `AuthSession.userId`（再由 `userType` 分派），
   因此必须由同一个生成器产出才能保证该字段在服务内唯一。反之，只要有一列/一个 Redis 作用域会同时承载两个业务的 ID，
   就必须合并；不满足该判据时不要合并（合并会共享序列与位宽）。`channel_data_scope` 已改为数据库自增，不需要业务声明。
 
-- **Worker ID 是实例级资源**：一个 Pod 只租一个 Worker ID，三个业务共用它，因此业务数量不影响副本上限；副本上限是
+- **Worker ID 是实例级资源**：一个 Pod 只租一个 Worker ID，四个业务共用它，因此业务数量不影响副本上限；副本上限是
   Worker ID 池容量 `2^worker-id-bit-length` = 1024。Starter 使用 Redis 租约自动分配并续租，应用无需手工配置 Worker ID，
   但必须提供可用的 Redis 连接。
 - 因为共用 Worker ID 与序列起点，**不同业务在同一毫秒内会产出相同的 ID 序列**。本服务保证的是「业务域内唯一」：
@@ -62,7 +63,7 @@
 | `rbac_role` | **数据库自增** | 单库单写；ID 已被 SQL 种子数据固定并被 `rbac_user_role` 引用，改造成本高于收益（已知特例） |
 | `rbac_permission` | **数据库自增** | 同上；另有 `20260819_rbac_permission_system_managed.sql` 迁移依赖既有 ID |
 | `rbac_user_role` / `rbac_role_permission` | 联合主键，无 `id` | 关联表不需要业务标识 |
-| `user_order_*` | `id` 自增 + `order_id`/`uuid` 唯一键 | 分片表：自增做聚簇 PK（避免随机主键页分裂），全局唯一由业务键承担 |
+| `user_order_*` | 生成器（`user-order`） | 分片表：分片内自增会跨分片重号，主键必须由应用生成；路由按 `user_id`，与 id 无关。`order_id`/`uuid` 仍保留唯一索引 |
 
 `channel_data_scope` 由全局 ID 改为数据库自增需要同步已有库，见
 `ian-ddd-auth-boot/src/main/resources/sql/20260914_channel_id_strategy_alignment.sql`（人工执行，仅元数据变更）。

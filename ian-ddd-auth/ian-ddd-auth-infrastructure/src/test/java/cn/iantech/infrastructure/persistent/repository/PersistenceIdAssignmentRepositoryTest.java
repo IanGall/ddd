@@ -97,6 +97,8 @@ class PersistenceIdAssignmentRepositoryTest {
         assertEquals(AuthIdBusiness.IDENTITY, businessOf(RbacUserPO.class));
         assertEquals(AuthIdBusiness.IDENTITY, businessOf(CustomerUserPO.class));
         assertEquals(AuthIdBusiness.CHANNEL_CREDENTIAL, businessOf(ChannelCredentialPO.class));
+        // 分片表：分片内自增会跨分片重号，所以主键也由应用生成（路由按 user_id，与 id 无关）
+        assertEquals(AuthIdBusiness.USER_ORDER, businessOf(UserOrderPO.class));
     }
 
     @Test
@@ -104,7 +106,6 @@ class PersistenceIdAssignmentRepositoryTest {
         assertNull(businessOf(RbacRolePO.class), "rbac_role 用数据库自增");
         assertNull(businessOf(RbacPermissionPO.class), "rbac_permission 用数据库自增");
         assertNull(businessOf(ChannelDataScopePO.class), "channel_data_scope 用数据库自增");
-        assertNull(businessOf(UserOrderPO.class), "分片表 user_order 必须保留自增主键");
     }
 
     @Test

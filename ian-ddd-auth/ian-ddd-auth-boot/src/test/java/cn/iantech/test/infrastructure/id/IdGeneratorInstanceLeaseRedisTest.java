@@ -41,8 +41,9 @@ class IdGeneratorInstanceLeaseRedisTest {
 
     private static final String PREFIX = "{" + NAMESPACE + "}:worker";
 
-    /** auth 服务声明的 3 个业务，全部共用一个实例级 Worker ID。 */
-    private static final List<String> BUSINESSES = List.of("identity", "auth-session", "channel-credential");
+    /** auth 服务声明的 4 个业务，全部共用一个实例级 Worker ID。 */
+    private static final List<String> BUSINESSES =
+            List.of("identity", "auth-session", "channel-credential", "user-order");
 
     @Resource
     private IRedisService redisService;

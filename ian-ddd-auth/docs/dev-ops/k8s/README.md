@@ -96,8 +96,8 @@ kubectl apply --dry-run=server -n "$NS" -f ian-ddd-auth/docs/dev-ops/k8s/
 
 ## 5. 副本数与全局 ID
 
-`ddd.id-generator.businesses` 声明了 3 个业务（`identity` / `auth-session` / `channel-credential`）。**一个实例只租用一个
-Worker ID，实例内三个业务共用它**，因此业务数量不影响副本上限：池容量是 `2^worker-id-bit-length` = 1024，
+`ddd.id-generator.businesses` 声明了 4 个业务（`identity` / `auth-session` / `channel-credential` / `user-order`）。**一个实例只租用一个
+Worker ID，实例内四个业务共用它**，因此业务数量不影响副本上限：池容量是 `2^worker-id-bit-length` = 1024，
 副本数超过它才会拿不到 Worker ID 租约并在启动期抛 `IdGenerationException`。HPA 上限取 8，留足余量。
 
 Worker ID 池是**服务级**的：`DDD_ID_GENERATOR_NAMESPACE` 就是池的身份（默认取 `spring.application.name`）。

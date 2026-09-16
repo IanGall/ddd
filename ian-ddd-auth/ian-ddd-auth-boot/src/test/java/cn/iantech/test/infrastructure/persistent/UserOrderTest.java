@@ -53,6 +53,7 @@ public class UserOrderTest {
     @Test
     public void shouldInsertUserOrders() {
         String lastUserId = null;
+        UserOrderPO lastOrder = null;
         for (int i = 0; i < 10; i++) {
             String userId = "ian_" + RandomStringUtils.randomAlphabetic(6);
             lastUserId = userId;
@@ -78,12 +79,17 @@ public class UserOrderTest {
                     .build();
 
             userOrderDao.insert(userOrderPO);
+            // 分片表的主键由 UserOrderPO 上的 @IdGenerator 填充，不依赖分片内自增
+            Assertions.assertNotNull(userOrderPO.getId(), "insert 后主键应已被 @IdGenerator 填充");
+            lastOrder = userOrderPO;
         }
 
         List<UserOrderPO> persisted = userOrderDao.selectByUserId(lastUserId);
         Assertions.assertFalse(persisted.isEmpty(), "插入后应能按 userId 路由查询到订单");
         Assertions.assertEquals("SKU-100001", persisted.getFirst().getSku());
         Assertions.assertEquals(lastUserId, persisted.getFirst().getUserId());
+        Assertions.assertEquals(lastOrder.getId(), persisted.getFirst().getId(),
+                "跨分片查回来的主键应与插入时生成的同一个");
     }
 
     // 验证持久化对象能够转换为领域对象

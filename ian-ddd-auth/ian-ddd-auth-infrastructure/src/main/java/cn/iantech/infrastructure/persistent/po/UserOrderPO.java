@@ -1,6 +1,8 @@
 package cn.iantech.infrastructure.persistent.po;
 
 import cn.iantech.domain.user.model.entity.UserOrderBO;
+import cn.iantech.infrastructure.id.AuthIdBusiness;
+import cn.iantech.mysql.annotation.IdGenerator;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,9 +17,15 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @AutoMapper(target = UserOrderBO.class)
+@IdGenerator(AuthIdBusiness.USER_ORDER)
 public class UserOrderPO {
 
-    /** 自增ID */
+    /**
+     * 主键，由 {@code @IdGenerator} 在 insert 时填充。
+     *
+     * <p>不用分片内自增：{@code user_order_0..3} 各自计数会跨分片重号，而这张表的主键需要全局唯一。
+     * 表按 {@code user_id} 路由，与 id 无关，因此应用侧提前生成主键不影响分片路由。
+     */
     private Long id;
     /** 用户姓名 */
     private String userName;

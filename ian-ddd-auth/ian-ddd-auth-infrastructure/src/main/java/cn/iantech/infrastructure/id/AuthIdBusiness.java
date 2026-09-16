@@ -28,6 +28,14 @@ public final class AuthIdBusiness {
     /** 渠道凭证标识。 */
     public static final String CHANNEL_CREDENTIAL = "channel-credential";
 
+    /**
+     * 分片订单表 {@code user_order} 的标识。
+     *
+     * <p>单独一个业务而不是并入 {@link #IDENTITY}：它的 id 不会流进任何身份字段，按划界判据不该合并。
+     * 分片表按 {@code user_id} 路由，与 id 无关，所以应用侧提前生成主键不影响路由。
+     */
+    public static final String USER_ORDER = "user-order";
+
     private AuthIdBusiness() {
     }
 }

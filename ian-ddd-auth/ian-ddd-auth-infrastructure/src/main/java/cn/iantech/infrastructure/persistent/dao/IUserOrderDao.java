@@ -8,7 +8,11 @@ import java.util.List;
 @Mapper
 public interface IUserOrderDao {
 
-    void insert(UserOrderPO userOrderPO);
+    /**
+     * 插入订单。主键由 {@code UserOrderPO} 上的 {@code @IdGenerator} 注解在 insert 时填充，
+     * 因此这里返回受影响行数而不是依赖数据库回填主键。
+     */
+    int insert(UserOrderPO userOrderPO);
 
     void updateOrderStatusByUserId(String userId);
 

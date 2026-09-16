@@ -28,7 +28,7 @@ use `ian_dev_tech_db_01`;
 DROP TABLE IF EXISTS `user_order_0`;
 
 CREATE TABLE `user_order_0` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如order_id，会导致innodb内部page分裂和大量随机I/O，性能下降】int 大约21亿左右，超过会报错。bigint 大约9千亿左右。',
+  `id` bigint unsigned NOT NULL COMMENT '主键；由应用通过全局 ID 生成器赋值（见 UserOrderPO 上的 @IdGenerator），跨分片全局唯一。【不要再改回分片内自增：user_order_0..3 各自计数会跨分片重号】也不要用 order_id 这类随机值做主键，会导致 innodb 内部 page 分裂与大量随机 I/O。',
   `user_name` varchar(64) NOT NULL COMMENT '用户姓名；',
   `user_id` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户编号；',
   `user_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户电话；使用varchar(20)存储手机号，不要使用整型。手机号不会做数学计算、涉及到区号或者国家代号，可能出现+-()、支持模糊查询，例如：like“135%”',
@@ -54,7 +54,7 @@ CREATE TABLE `user_order_0` (
   UNIQUE KEY `uq_uuid` (`uuid`),
   KEY `idx_order_date` (`order_date`),
   KEY `idx_sku_unit_price_total_amount` (`sku`,`unit_price`,`total_amount`)
-) ENGINE=InnoDB AUTO_INCREMENT=144 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 LOCK TABLES `user_order_0` WRITE;
 /*!40000 ALTER TABLE `user_order_0` DISABLE KEYS */;
@@ -74,7 +74,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `user_order_1`;
 
 CREATE TABLE `user_order_1` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如order_id，会导致innodb内部page分裂和大量随机I/O，性能下降】int 大约21亿左右，超过会报错。bigint 大约9千亿左右。',
+  `id` bigint unsigned NOT NULL COMMENT '主键；由应用通过全局 ID 生成器赋值（见 UserOrderPO 上的 @IdGenerator），跨分片全局唯一。【不要再改回分片内自增：user_order_0..3 各自计数会跨分片重号】也不要用 order_id 这类随机值做主键，会导致 innodb 内部 page 分裂与大量随机 I/O。',
   `user_name` varchar(64) NOT NULL COMMENT '用户姓名；',
   `user_id` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户编号；',
   `user_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户电话；使用varchar(20)存储手机号，不要使用整型。手机号不会做数学计算、涉及到区号或者国家代号，可能出现+-()、支持模糊查询，例如：like“135%”',
@@ -100,7 +100,7 @@ CREATE TABLE `user_order_1` (
   UNIQUE KEY `uq_uuid` (`uuid`),
   KEY `idx_order_date` (`order_date`),
   KEY `idx_sku_unit_price_total_amount` (`sku`,`unit_price`,`total_amount`)
-) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 LOCK TABLES `user_order_1` WRITE;
 /*!40000 ALTER TABLE `user_order_1` DISABLE KEYS */;
@@ -120,7 +120,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `user_order_2`;
 
 CREATE TABLE `user_order_2` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如order_id，会导致innodb内部page分裂和大量随机I/O，性能下降】int 大约21亿左右，超过会报错。bigint 大约9千亿左右。',
+  `id` bigint unsigned NOT NULL COMMENT '主键；由应用通过全局 ID 生成器赋值（见 UserOrderPO 上的 @IdGenerator），跨分片全局唯一。【不要再改回分片内自增：user_order_0..3 各自计数会跨分片重号】也不要用 order_id 这类随机值做主键，会导致 innodb 内部 page 分裂与大量随机 I/O。',
   `user_name` varchar(64) NOT NULL COMMENT '用户姓名；',
   `user_id` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户编号；',
   `user_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户电话；使用varchar(20)存储手机号，不要使用整型。手机号不会做数学计算、涉及到区号或者国家代号，可能出现+-()、支持模糊查询，例如：like“135%”',
@@ -146,7 +146,7 @@ CREATE TABLE `user_order_2` (
   UNIQUE KEY `uq_uuid` (`uuid`),
   KEY `idx_order_date` (`order_date`),
   KEY `idx_sku_unit_price_total_amount` (`sku`,`unit_price`,`total_amount`)
-) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 LOCK TABLES `user_order_2` WRITE;
 /*!40000 ALTER TABLE `user_order_2` DISABLE KEYS */;
@@ -166,7 +166,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `user_order_3`;
 
 CREATE TABLE `user_order_3` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增ID；【必须保留自增ID，不要将一些有随机特性的字段值设计为主键，例如order_id，会导致innodb内部page分裂和大量随机I/O，性能下降】int 大约21亿左右，超过会报错。bigint 大约9千亿左右。',
+  `id` bigint unsigned NOT NULL COMMENT '主键；由应用通过全局 ID 生成器赋值（见 UserOrderPO 上的 @IdGenerator），跨分片全局唯一。【不要再改回分片内自增：user_order_0..3 各自计数会跨分片重号】也不要用 order_id 这类随机值做主键，会导致 innodb 内部 page 分裂与大量随机 I/O。',
   `user_name` varchar(64) NOT NULL COMMENT '用户姓名；',
   `user_id` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户编号；',
   `user_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户电话；使用varchar(20)存储手机号，不要使用整型。手机号不会做数学计算、涉及到区号或者国家代号，可能出现+-()、支持模糊查询，例如：like“135%”',
@@ -192,7 +192,7 @@ CREATE TABLE `user_order_3` (
   UNIQUE KEY `uq_uuid` (`uuid`),
   KEY `idx_order_date` (`order_date`),
   KEY `idx_sku_unit_price_total_amount` (`sku`,`unit_price`,`total_amount`)
-) ENGINE=InnoDB AUTO_INCREMENT=148 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 LOCK TABLES `user_order_3` WRITE;
 /*!40000 ALTER TABLE `user_order_3` DISABLE KEYS */;

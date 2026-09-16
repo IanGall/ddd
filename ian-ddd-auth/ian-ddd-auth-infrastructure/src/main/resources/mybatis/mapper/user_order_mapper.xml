@@ -25,16 +25,16 @@
         <result column="update_time" property="updateTime"/>
     </resultMap>
 
-    <select id="insert" parameterType="cn.iantech.infrastructure.persistent.po.UserOrderPO">
-        INSERT INTO user_order (user_name, user_id, user_mobile, sku, sku_name,
+    <insert id="insert" parameterType="cn.iantech.infrastructure.persistent.po.UserOrderPO">
+        INSERT INTO user_order (id, user_name, user_id, user_mobile, sku, sku_name,
         order_id, quantity, unit_price, discount_amount, tax,
         total_amount, order_date, order_status, is_delete, uuid,
         ipv4, ipv6, ext_data, update_time, create_time)
-        VALUES (#{userName}, #{userId}, #{userMobile}, #{sku}, #{skuName},
+        VALUES (#{id}, #{userName}, #{userId}, #{userMobile}, #{sku}, #{skuName},
         #{orderId}, #{quantity}, #{unitPrice}, #{discountAmount}, #{tax},
         #{totalAmount}, #{orderDate}, #{orderStatus}, #{isDelete}, #{uuid},
         INET_ATON(#{ipv4}), INET6_ATON(#{ipv6}), #{extData}, now(), now())
-    </select>
+    </insert>
 
     <update id="updateOrderStatusByUserId" parameterType="java.lang.String">
         UPDATE user_order SET order_status = 1 WHERE user_id = #{userId}
