@@ -2,6 +2,7 @@ package cn.iantech.trigger.rpc;
 
 import cn.iantech.api.model.auth.AuthLoginReq;
 import cn.iantech.api.model.auth.AuthSessionDTO;
+import cn.iantech.api.model.auth.AuthSessionQueryReq;
 import cn.iantech.api.model.auth.AuthTokenDTO;
 import cn.iantech.api.model.auth.AuthValidateReq;
 import cn.iantech.cases.auth.model.AuthCaseModels.IdentityResult;
@@ -58,7 +59,7 @@ class AuthServiceTest {
                         Instant.parse("2026-09-13T00:00:00Z"), Instant.parse("2026-09-13T01:00:00Z"), true)));
 
         List<AuthSessionDTO> sessions = authService.sessions(
-                cn.iantech.api.model.auth.AuthSessionQueryReq.builder().accessToken("access-1").build());
+                AuthSessionQueryReq.builder().accessToken("access-1").build());
 
         assertEquals(1, sessions.size());
         assertEquals("sess-1", sessions.getFirst().getSessionId());

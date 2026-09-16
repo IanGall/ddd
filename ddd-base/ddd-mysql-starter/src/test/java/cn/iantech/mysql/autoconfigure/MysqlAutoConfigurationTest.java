@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MysqlAutoConfigurationTest {
@@ -53,7 +55,7 @@ class MysqlAutoConfigurationTest {
 
         try (var input = getClass().getClassLoader().getResourceAsStream(resourceName)) {
             assertThat(input).isNotNull();
-            assertThat(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+            assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8))
                     .contains("cn.iantech.mysql.autoconfigure.MysqlAutoConfiguration");
         }
     }

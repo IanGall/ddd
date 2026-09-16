@@ -13,6 +13,7 @@ import cn.iantech.coverage.controller.web.CoverageExceptionHandler;
 import cn.iantech.coverage.controller.web.ReportResourceController;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.hamcrest.Matchers;
 import org.jacoco.core.data.ExecutionData;
 import org.jacoco.core.tools.ExecFileLoader;
 import org.junit.jupiter.api.*;
@@ -20,9 +21,11 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -107,12 +110,12 @@ class CoverageSessionFlowTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"CoverageSessionFlowTest\",\"buildId\":\"test-build\"}"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("RUNNING")))
+                .andExpect(content().string(Matchers.containsString("RUNNING")))
                 .andReturn();
 
         JsonNode session = MAPPER.readTree(result.getResponse().getContentAsString());
         sessionId = session.get("id").asText();
-        sessionDirectory = Path.of(java.net.URI.create(session.get("directory").asText()));
+        sessionDirectory = Path.of(URI.create(session.get("directory").asText()));
 
         assertTrue(!sessionId.isBlank(), "sessionId 不应为空");
         assertTrue(hasReachableAgent(session), "应至少有一个 Agent 探测为可连接");
@@ -170,10 +173,10 @@ class CoverageSessionFlowTest {
 
         mockMvc.perform(get("/api/coverage/sessions/{id}/reports/index.html", sessionId))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("JaCoCo")));
+                .andExpect(content().string(Matchers.containsString("JaCoCo")));
         mockMvc.perform(get("/api/coverage/sessions/{id}/report", sessionId))
                 .andExpect(status().isFound())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .andExpect(MockMvcResultMatchers
                         .redirectedUrl("/api/coverage/sessions/" + sessionId + "/reports/index.html"));
         mockMvc.perform(get("/api/coverage/sessions/{id}/reports/dashboard.html", sessionId))
                 .andExpect(status().isNotFound());
