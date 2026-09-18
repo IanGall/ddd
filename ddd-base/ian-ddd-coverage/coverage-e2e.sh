@@ -89,7 +89,7 @@ detect_workspace_root() {
     local probe="${candidate}"
     local i=0
     while (( i < 5 )); do
-        if [[ -d "${probe}/ddd-base" && -d "${probe}/ian-ddd-gateway" ]]; then
+        if [[ -d "${probe}/ddd-base" ]] && compgen -G "${probe}/*gateway*" >/dev/null 2>&1; then
             printf '%s' "${probe}"
             return 0
         fi
@@ -101,13 +101,35 @@ detect_workspace_root() {
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-$(detect_workspace_root || true)}"
 [[ -n "${WORKSPACE_DIR}" ]] || {
-    echo "[e2e] 无法定位工作区根目录（需同时存在 ddd-base 与 ian-ddd-gateway），请显式设置 WORKSPACE_DIR" >&2
+    echo "[e2e] 无法定位工作区根目录（需同时存在 ddd-base 与任一 *gateway* 模块目录），请显式设置 WORKSPACE_DIR" >&2
     exit 1
 }
-DDD_BASE_DIR="${WORKSPACE_DIR}/ddd-base"
-GATEWAY_DIR="${WORKSPACE_DIR}/ian-ddd-gateway"
-AUTH_DIR="${WORKSPACE_DIR}/ian-ddd-auth"
-AUTH_API_DIR="${WORKSPACE_DIR}/ian-ddd-api/ian-ddd-api-internal/ian-ddd-auth-api"
+# 模块目录解析：优先环境变量，其次按 glob 自动发现（不绑定项目前缀，ian-ddd 与 ian-rcs 通用）
+resolve_module_dir() {
+    local cur="$1"; shift
+    local pat d next
+    for pat in "$@"; do
+        next=""
+        for d in "${cur}"/$pat; do
+            [[ -d "${d}" ]] && { next="${d}"; break; }
+        done
+        [[ -n "${next}" ]] || return 1
+        cur="${next}"
+    done
+    printf '%s' "${cur}"
+}
+
+DDD_BASE_DIR="${DDD_BASE_DIR:-${WORKSPACE_DIR}/ddd-base}"
+GATEWAY_DIR="${GATEWAY_DIR:-$(resolve_module_dir "${WORKSPACE_DIR}" '*gateway*')}"
+AUTH_DIR="${AUTH_DIR:-$(resolve_module_dir "${WORKSPACE_DIR}" '*-auth')}"
+AUTH_API_DIR="${AUTH_API_DIR:-$(resolve_module_dir "${WORKSPACE_DIR}" '*-api' '*-api-internal' '*-auth-api')}"
+
+[[ -n "${GATEWAY_DIR}" ]] || { echo "[e2e] 未找到网关模块目录（*gateway*），可用 GATEWAY_DIR 显式指定" >&2; exit 1; }
+[[ -n "${AUTH_DIR}" ]] || { echo "[e2e] 未找到认证模块目录（*-auth），可用 AUTH_DIR 显式指定" >&2; exit 1; }
+[[ -n "${AUTH_API_DIR}" ]] || { echo "[e2e] 未找到认证契约模块目录（*-api/*-api-internal/*-auth-api），可用 AUTH_API_DIR 显式指定" >&2; exit 1; }
+
+# 认证模块名前缀（如 ian-ddd-auth / ian-rcs-auth），用于派生其子模块类路径
+AUTH_MODULE_NAME="$(basename "${AUTH_DIR}")"
 
 CONTROLLER_PORT="${CONTROLLER_PORT:-8099}"
 GATEWAY_PORT="${GATEWAY_PORT:-8092}"
@@ -329,31 +351,37 @@ preflight() {
         port_listening "${port}" || warn "基础设施端口 ${port} 未监听，服务可能启动失败"
     done
 
-    # 报告依赖各服务的 classes 目录，缺失会导致覆盖率静默为 0
-    local missing=()
-    for dir in \
-        "${GATEWAY_DIR}/gateway-core/target/classes" \
-        "${GATEWAY_DIR}/gateway-app/target/classes" \
-        "${AUTH_DIR}/ian-ddd-auth-trigger/target/classes" \
-        "${AUTH_DIR}/ian-ddd-auth-domain/target/classes" \
-        "${AUTH_DIR}/ian-ddd-auth-infrastructure/target/classes" \
-        "${AUTH_API_DIR}/target/classes"; do
-        [[ -d "${dir}" ]] || missing+=("${dir}")
-    done
-
-    # 追加服务：检查项目目录与带覆盖率的启动脚本
+    # 追加服务：只检查目录与启动脚本——它们不属于本工作区构建，故放在构建前。
+    # 注意：本工作区的 target/classes 检查**不能**放在这里，见 preflight_artifacts。
     local count index name dir script
     count="$(extra_service_count)"
     for (( index = 0; index < count; index++ )); do
         name="$(extra_service_field "${index}" 1)"
         dir="$(extra_service_dir "${index}")"
-        [[ -d "${dir}" ]] || { missing+=("${dir}"); continue; }
+        [[ -d "${dir}" ]] || fail "追加服务 [${name}] 目录不存在：${dir}"
         script="$(extra_service_start_script "${dir}")"
         [[ -n "${script}" ]] || fail "追加服务 [${name}] 缺少启动脚本：${dir}/docs/dev-ops/start-with-coverage.sh 或 ${dir}/dev-ops/start-with-coverage.sh"
     done
+}
+
+# 构建产物检查：**必须在 build_all 之后调用**。
+# 首次运行（或 mvn clean 之后）target/classes 尚不存在，若放在构建前会必然误报
+# 「以下目录不存在，请先构建」——这是本脚本曾有的顺序缺陷。
+preflight_artifacts() {
+    # 报告依赖各服务的 classes 目录，缺失会导致覆盖率静默为 0
+    local missing=()
+    for dir in \
+        "${GATEWAY_DIR}/gateway-core/target/classes" \
+        "${GATEWAY_DIR}/gateway-app/target/classes" \
+        "${AUTH_DIR}/${AUTH_MODULE_NAME}-trigger/target/classes" \
+        "${AUTH_DIR}/${AUTH_MODULE_NAME}-domain/target/classes" \
+        "${AUTH_DIR}/${AUTH_MODULE_NAME}-infrastructure/target/classes" \
+        "${AUTH_API_DIR}/target/classes"; do
+        [[ -d "${dir}" ]] || missing+=("${dir}")
+    done
 
     if (( ${#missing[@]} > 0 )); then
-        fail "以下目录不存在，请先构建（不要用 COVERAGE_SKIP_BUILD=1）：$(printf '\n  %s' "${missing[@]}")"
+        fail "以下目录不存在（已构建仍缺失，请检查构建是否失败）：$(printf '\n  %s' "${missing[@]}")"
     fi
 }
 
@@ -912,6 +940,7 @@ case "${COMMAND}" in
     start)
         preflight
         build_all
+        preflight_artifacts
         reclaim_ports
         start_services
         print_report
@@ -929,6 +958,7 @@ case "${COMMAND}" in
         trap cleanup_on_exit EXIT
         preflight
         build_all
+        preflight_artifacts
         reclaim_ports
         start_services
         run_tests
