@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
+import static cn.iantech.common.constant.Constants.ResponseCode.CONFLICT;
 
 @Repository
 @RequiredArgsConstructor
@@ -34,9 +34,34 @@ public class RbacPermissionRepository implements IRbacPermissionRepository {
             rbacPermissionDao.insert(rbacPermissionPO);
         } catch (DuplicateKeyException exception) {
             // 并发写入唯一索引兜底，避免裸 DuplicateKeyException 直接 500
-            throw new AppException(INVALID_ARGUMENT.getCode(), "权限编码已存在");
+            throw new AppException(CONFLICT.getCode(), "权限编码已存在");
         }
         return converter.convert(rbacPermissionPO, RbacPermissionEntity.class);
+    }
+
+    @Override
+    public void saveAll(Long accountId, List<RbacPermissionEntity> entities) {
+        if (entities == null || entities.isEmpty()) {
+            return;
+        }
+        // 与单条 save 保持同一套语义：账号归属以参数为准、补齐时间字段、不入参自增主键
+        LocalDateTime now = LocalDateTime.now();
+        List<RbacPermissionPO> poList = entities.stream()
+                .map(entity -> {
+                    RbacPermissionPO po = converter.convert(entity, RbacPermissionPO.class);
+                    po.setId(null);
+                    po.setAccountId(accountId);
+                    po.setCreateTime(now);
+                    po.setUpdateTime(now);
+                    return po;
+                })
+                .toList();
+        try {
+            rbacPermissionDao.insertBatch(poList);
+        } catch (DuplicateKeyException exception) {
+            // 与单条写入同语义（409）；异常继续抛出，由调用方事务整体回滚
+            throw new AppException(CONFLICT.getCode(), "权限编码已存在");
+        }
     }
 
     @Override

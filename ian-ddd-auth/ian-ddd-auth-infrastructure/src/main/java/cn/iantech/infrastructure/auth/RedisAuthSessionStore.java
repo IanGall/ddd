@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -156,6 +158,20 @@ public class RedisAuthSessionStore implements IAuthSessionStore {
             return 1
             """;
 
+    /**
+     * 批量撤销：在单个 Lua 内循环调用 {@code revokeFamily}，把 N 次往返收敛为 1 次。
+     *
+     * <p>参数约定：{@code ARGV[1]}=作用域前缀、{@code ARGV[2]}=撤销时间戳、{@code ARGV[3..]}=familyId。
+     * KEYS 传入<b>同一用户</b>的 family 键，用于声明 Cluster Slot；脚本内部仍按前缀拼键，
+     * 因此 familyId 必须以参数形式一并传入。</p>
+     */
+    private static final String REVOKE_FAMILIES_SCRIPT = LUA_FUNCTIONS + """
+            for index = 3, #ARGV do
+                revokeFamily(ARGV[1], ARGV[index], ARGV[2])
+            end
+            return 1
+            """;
+
     private final IRedisService redisService;
 
     public RedisAuthSessionStore(IRedisService redisService) {
@@ -210,6 +226,24 @@ public class RedisAuthSessionStore implements IAuthSessionStore {
     public void revokeFamily(Long userId, String familyId, Instant revokedAt) {
         redisService.executeLongScript(REVOKE_FAMILY_SCRIPT, List.of(AuthRedisKey.family(userId, familyId)),
                 List.of(AuthRedisKey.scopePrefix(userId), familyId, revokedAt.toEpochMilli()));
+    }
+
+    @Override
+    public void revokeFamilies(Long userId, Collection<String> familyIds, Instant revokedAt) {
+        List<String> distinctFamilyIds = familyIds == null ? List.of()
+                : familyIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (distinctFamilyIds.isEmpty()) {
+            return;
+        }
+        // KEYS 必须落在同一用户的 Hash Tag 范围内，保证 Cluster 下脚本只路由到一个节点
+        List<String> keys = distinctFamilyIds.stream()
+                .map(familyId -> AuthRedisKey.family(userId, familyId))
+                .toList();
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(AuthRedisKey.scopePrefix(userId));
+        arguments.add(revokedAt.toEpochMilli());
+        arguments.addAll(distinctFamilyIds);
+        redisService.executeLongScript(REVOKE_FAMILIES_SCRIPT, keys, arguments);
     }
 
     @Override

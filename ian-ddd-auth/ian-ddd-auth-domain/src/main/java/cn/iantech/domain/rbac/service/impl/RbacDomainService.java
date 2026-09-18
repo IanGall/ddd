@@ -1,6 +1,5 @@
 package cn.iantech.domain.rbac.service.impl;
 
-import cn.iantech.domain.auth.infra.IPasswordEncoder;
 import cn.iantech.domain.model.DomainPage;
 import cn.iantech.domain.rbac.infra.*;
 import cn.iantech.domain.rbac.model.entity.RbacPermissionEntity;
@@ -17,12 +16,12 @@ import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.SYSTEM_P
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.USERNAME_PATTERN;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkAccountId;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkCustomPermission;
-import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPassword;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPermissionId;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkPermType;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkRoleId;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkTextLength;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.checkUserId;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.conflict;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.illegalParameter;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeIds;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeNullableText;
@@ -31,6 +30,7 @@ import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normaliz
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizePageSize;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizeParentId;
 import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.normalizePermType;
+import static cn.iantech.domain.rbac.service.impl.RbacValidationSupport.notFound;
 
 @RequiredArgsConstructor
 @Service
@@ -53,32 +53,33 @@ public class RbacDomainService {
     private final IRbacRoleRepository rbacRoleRepository;
     private final IRbacPermissionRepository rbacPermissionRepository;
     private final IRbacRelationRepository rbacRelationRepository;
-    private final IPasswordEncoder passwordEncoder;
     private final IRbacAccountRepository rbacAccountRepository;
 
-    public RbacUserEntity createUser(Long accountId, String username, String rawPassword, String displayName, String email, String mobile, Boolean status) {
+    /**
+     * @param passwordHash 调用方在事务外完成编码的口令摘要，本方法不再做校验与编码
+     */
+    public RbacUserEntity createUser(Long accountId, String username, String passwordHash, String displayName, String email, String mobile, Boolean status) {
         checkAccountId(accountId);
         String finalUsername = StringUtils.trimToNull(username);
         if (StringUtils.isBlank(finalUsername) || !USERNAME_PATTERN.matcher(finalUsername).matches()) {
             throw illegalParameter("子账号用户名格式非法");
         }
         checkTextLength(finalUsername, "子账号用户名", MAX_USERNAME_LENGTH);
-        checkPassword(rawPassword);
         String finalDisplayName = normalizeOptionalText(displayName, "显示名称", MAX_DISPLAY_NAME_LENGTH);
         String finalEmail = normalizeOptionalText(email, "邮箱", MAX_EMAIL_LENGTH);
         String finalMobile = normalizeOptionalText(mobile, "手机号", MAX_MOBILE_LENGTH);
 
         if (rbacUserRepository.findByUsername(accountId, finalUsername).isPresent()) {
-            throw illegalParameter("用户名已存在");
+            throw conflict("用户名已存在");
         }
         if (rbacAccountRepository.findByUsername(accountId, finalUsername).isPresent()) {
-            throw illegalParameter("子账号用户名不能与主账号相同");
+            throw conflict("子账号用户名不能与主账号相同");
         }
 
         RbacUserEntity createEntity = RbacUserEntity.builder()
                 .accountId(accountId)
                 .username(finalUsername)
-                .passwordHash(passwordEncoder.encode(rawPassword))
+                .passwordHash(passwordHash)
                 .displayName(finalDisplayName)
                 .email(finalEmail)
                 .mobile(finalMobile)
@@ -97,7 +98,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkUserId(id);
         return rbacUserRepository.findById(accountId, id)
-                .orElseThrow(() -> illegalParameter("用户不存在"));
+                .orElseThrow(() -> notFound("用户不存在"));
     }
 
     public DomainPage<RbacUserEntity> queryUserPage(Long accountId, Integer pageNum, Integer pageSize, String username, Boolean status) {
@@ -116,19 +117,20 @@ public class RbacDomainService {
         return new DomainPage<>(total, finalPageNum, finalPageSize, userList);
     }
 
-    public RbacUserEntity updateUser(Long accountId, Long id, String rawPassword, String displayName, String email, String mobile, Boolean status) {
+    /**
+     * @param passwordHash 调用方在事务外完成编码的口令摘要；传 {@code null} 表示不修改口令
+     */
+    public RbacUserEntity updateUser(Long accountId, Long id, String passwordHash, String displayName,
+                                     String email, String mobile, Boolean status) {
         checkAccountId(accountId);
         checkUserId(id);
 
-        if (StringUtils.isBlank(rawPassword)
+        if (Objects.isNull(passwordHash)
                 && Objects.isNull(displayName)
                 && Objects.isNull(email)
                 && Objects.isNull(mobile)
                 && Objects.isNull(status)) {
             throw illegalParameter("更新内容不能为空");
-        }
-        if (StringUtils.isNotBlank(rawPassword)) {
-            checkPassword(rawPassword);
         }
         String finalDisplayName = normalizeNullableText(displayName, "显示名称", MAX_DISPLAY_NAME_LENGTH);
         String finalEmail = normalizeNullableText(email, "邮箱", MAX_EMAIL_LENGTH);
@@ -137,7 +139,7 @@ public class RbacDomainService {
         RbacUserEntity updateEntity = RbacUserEntity.builder()
                 .id(id)
                 .accountId(accountId)
-                .passwordHash(StringUtils.isBlank(rawPassword) ? null : passwordEncoder.encode(rawPassword))
+                .passwordHash(passwordHash)
                 .displayName(finalDisplayName)
                 .email(finalEmail)
                 .mobile(finalMobile)
@@ -146,7 +148,7 @@ public class RbacDomainService {
 
         int updateCount = rbacUserRepository.updateById(accountId, updateEntity);
         if (updateCount <= 0) {
-            throw illegalParameter("用户不存在");
+            throw notFound("用户不存在");
         }
 
         return queryUserById(accountId, id);
@@ -157,7 +159,7 @@ public class RbacDomainService {
         checkUserId(id);
         int updateCount = rbacUserRepository.logicDeleteById(accountId, id);
         if (updateCount <= 0) {
-            throw illegalParameter("用户不存在");
+            throw notFound("用户不存在");
         }
         rbacRelationRepository.deleteAllUserRoles(accountId, id);
         return true;
@@ -179,7 +181,7 @@ public class RbacDomainService {
         String finalRoleDesc = normalizeOptionalText(roleDesc, "角色描述", MAX_ROLE_DESC_LENGTH);
 
         if (rbacRoleRepository.findByRoleCode(accountId, finalRoleCode).isPresent()) {
-            throw illegalParameter("角色编码已存在");
+            throw conflict("角色编码已存在");
         }
 
         RbacRoleEntity createEntity = RbacRoleEntity.builder()
@@ -203,7 +205,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkRoleId(id);
         return rbacRoleRepository.findById(accountId, id)
-                .orElseThrow(() -> illegalParameter("角色不存在"));
+                .orElseThrow(() -> notFound("角色不存在"));
     }
 
     public DomainPage<RbacRoleEntity> queryRolePage(Long accountId, Integer pageNum, Integer pageSize, String roleCode, String roleName, Boolean status) {
@@ -244,7 +246,7 @@ public class RbacDomainService {
             rbacRoleRepository.findByRoleCode(accountId, finalRoleCode)
                     .filter(item -> !Objects.equals(item.getId(), id))
                     .ifPresent(item -> {
-                        throw illegalParameter("角色编码已存在");
+                        throw conflict("角色编码已存在");
                     });
         }
 
@@ -269,7 +271,7 @@ public class RbacDomainService {
 
         int updateCount = rbacRoleRepository.updateById(accountId, updateEntity);
         if (updateCount <= 0) {
-            throw illegalParameter("角色不存在");
+            throw notFound("角色不存在");
         }
 
         return queryRoleById(accountId, id);
@@ -281,7 +283,7 @@ public class RbacDomainService {
         queryRoleById(accountId, id);
         int updateCount = rbacRoleRepository.logicDeleteById(accountId, id);
         if (updateCount <= 0) {
-            throw illegalParameter("角色不存在");
+            throw notFound("角色不存在");
         }
         rbacRelationRepository.deleteAllRoleRelations(accountId, id);
         return true;
@@ -311,7 +313,7 @@ public class RbacDomainService {
         checkPermissionParent(accountId, null, finalParentId);
 
         if (rbacPermissionRepository.findByPermCode(accountId, finalPermCode).isPresent()) {
-            throw illegalParameter("权限编码已存在");
+            throw conflict("权限编码已存在");
         }
 
         RbacPermissionEntity createEntity = RbacPermissionEntity.builder()
@@ -339,7 +341,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkPermissionId(id);
         return rbacPermissionRepository.findById(accountId, id)
-                .orElseThrow(() -> illegalParameter("权限不存在"));
+                .orElseThrow(() -> notFound("权限不存在"));
     }
 
     public DomainPage<RbacPermissionEntity> queryPermissionPage(Long accountId, Integer pageNum, Integer pageSize, String permCode, String permName, Integer permType, Long parentId, Boolean status) {
@@ -417,7 +419,7 @@ public class RbacDomainService {
 
         int updateCount = rbacPermissionRepository.updateById(accountId, updateEntity);
         if (updateCount <= 0) {
-            throw illegalParameter("权限不存在");
+            throw notFound("权限不存在");
         }
 
         return queryPermissionById(accountId, id);
@@ -430,7 +432,7 @@ public class RbacDomainService {
         checkCustomPermission(currentPermission);
         int updateCount = rbacPermissionRepository.logicDeleteById(accountId, id);
         if (updateCount <= 0) {
-            throw illegalParameter("权限不存在");
+            throw notFound("权限不存在");
         }
         rbacRelationRepository.deleteAllPermissionRelations(accountId, id);
         return true;
@@ -440,7 +442,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkUserId(userId);
         rbacUserRepository.findById(accountId, userId)
-                .orElseThrow(() -> illegalParameter("用户不存在"));
+                .orElseThrow(() -> notFound("用户不存在"));
 
         List<Long> targetRoleIds = normalizeIds(roleIds, "角色ID列表");
         checkRoleIdsExists(accountId, targetRoleIds);
@@ -472,7 +474,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkRoleId(roleId);
         rbacRoleRepository.findById(accountId, roleId)
-                .orElseThrow(() -> illegalParameter("角色不存在"));
+                .orElseThrow(() -> notFound("角色不存在"));
 
         List<Long> targetPermissionIds = normalizeIds(permissionIds, "权限ID列表");
         checkPermissionIdsExists(accountId, targetPermissionIds);
@@ -504,7 +506,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkUserId(userId);
         rbacUserRepository.findById(accountId, userId)
-                .orElseThrow(() -> illegalParameter("用户不存在"));
+                .orElseThrow(() -> notFound("用户不存在"));
 
         List<Long> roleIds = rbacRelationRepository.queryRoleIdsByUserId(accountId, userId);
         if (roleIds.isEmpty()) {
@@ -521,7 +523,7 @@ public class RbacDomainService {
         checkAccountId(accountId);
         checkRoleId(roleId);
         rbacRoleRepository.findById(accountId, roleId)
-                .orElseThrow(() -> illegalParameter("角色不存在"));
+                .orElseThrow(() -> notFound("角色不存在"));
 
         List<Long> permissionIds = rbacRelationRepository.queryPermissionIdsByRoleId(accountId, roleId);
         if (permissionIds.isEmpty()) {

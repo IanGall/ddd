@@ -38,7 +38,7 @@ public class PlatformAccountController {
 
     public record CreateAccountRequest(
             @NotBlank @Size(max = 64) String username,
-            @NotBlank @Size(min = 8, max = 72) String password,
+            @NotBlank String password,
             @Size(max = 128) String displayName,
             @Email @Size(max = 128) String email,
             @Size(max = 32) String mobile) {

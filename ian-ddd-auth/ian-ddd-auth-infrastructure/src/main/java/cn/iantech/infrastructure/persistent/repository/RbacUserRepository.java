@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
+import static cn.iantech.common.constant.Constants.ResponseCode.CONFLICT;
 
 @Repository
 public class RbacUserRepository implements IRbacUserRepository {
@@ -40,7 +40,7 @@ public class RbacUserRepository implements IRbacUserRepository {
             rbacUserDao.insert(rbacUserPO);
         } catch (DuplicateKeyException exception) {
             // 并发注册唯一索引兜底，避免裸 DuplicateKeyException 直接 500
-            throw new AppException(INVALID_ARGUMENT.getCode(), "用户名已存在");
+            throw new AppException(CONFLICT.getCode(), "用户名已存在");
         }
         return converter.convert(rbacUserPO, RbacUserEntity.class);
     }

@@ -91,13 +91,13 @@ class GatewayErrorE2eTest {
 
     @Test
     void shouldReturnNotFoundForMissingResources() {
-        // RBAC 领域把「不存在」统一按参数不合法上报
+        // 授权通过后的目标资源不存在统一为 404 NOT_FOUND（与渠道凭证语义一致）
         CoverageE2eSupport.get("/api/admin/rbac/users/999999999", tokens.accessToken())
-                .expectError(400, "INVALID_ARGUMENT");
+                .expectError(404, "NOT_FOUND");
         CoverageE2eSupport.get("/api/admin/rbac/roles/999999999", tokens.accessToken())
-                .expectError(400, "INVALID_ARGUMENT");
+                .expectError(404, "NOT_FOUND");
         CoverageE2eSupport.get("/api/admin/rbac/permissions/999999999", tokens.accessToken())
-                .expectError(400, "INVALID_ARGUMENT");
+                .expectError(404, "NOT_FOUND");
     }
 
     @Test
@@ -108,9 +108,9 @@ class GatewayErrorE2eTest {
         long roleId = CoverageE2eSupport.post("/api/admin/rbac/roles", roleBody, tokens.accessToken())
                 .data().path("id").asLong();
 
-        // 同一账号内角色编码唯一，重复创建必须失败
+        // 同一账号内角色编码唯一，重复创建必须失败（预检查与唯一索引兜底同为 409）
         CoverageE2eSupport.post("/api/admin/rbac/roles", roleBody, tokens.accessToken())
-                .expectError(400, "INVALID_ARGUMENT");
+                .expectError(409, "CONFLICT");
 
         CoverageE2eSupport.delete("/api/admin/rbac/roles/" + roleId, tokens.accessToken()).data();
     }

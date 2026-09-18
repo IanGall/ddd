@@ -48,6 +48,44 @@
         )
     </insert>
 
+    <!--
+      批量插入：开户初始化内置权限目录用。
+      刻意不声明 useGeneratedKeys——调用方不使用权限主键，避免依赖批量回填在
+      不同驱动/分片中间件下的行为差异。
+    -->
+    <insert id="insertBatch">
+        INSERT INTO rbac_permission (
+            account_id,
+            perm_code,
+            perm_name,
+            perm_type,
+            parent_id,
+            path,
+            method,
+            status,
+            system_managed,
+            deleted,
+            create_time,
+            update_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.accountId},
+            #{item.permCode},
+            #{item.permName},
+            #{item.permType},
+            #{item.parentId},
+            #{item.path},
+            #{item.method},
+            #{item.status},
+            #{item.systemManaged},
+            #{item.deleted},
+            NOW(),
+            NOW()
+            )
+        </foreach>
+    </insert>
+
     <select id="selectById" resultMap="dataMap">
         SELECT id, account_id, perm_code, perm_name, perm_type, parent_id, path, method, status, system_managed, deleted, create_time, update_time
         FROM rbac_permission

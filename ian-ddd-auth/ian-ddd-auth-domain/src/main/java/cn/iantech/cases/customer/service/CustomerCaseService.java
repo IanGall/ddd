@@ -5,6 +5,7 @@ import cn.iantech.common.exception.AppException;
 import cn.iantech.common.util.Sha256;
 import cn.iantech.domain.auth.infra.IAuthRiskStore;
 import cn.iantech.domain.auth.infra.IPasswordEncoder;
+import cn.iantech.domain.auth.service.PasswordPolicy;
 import cn.iantech.domain.customer.infra.ICustomerUserRepository;
 import cn.iantech.domain.customer.model.CustomerUserEntity;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.Locale;
 
 import static cn.iantech.common.constant.Constants.ResponseCode.AUTH_RATE_LIMITED;
+import static cn.iantech.common.constant.Constants.ResponseCode.CONFLICT;
 import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
 
 /**
@@ -59,9 +61,9 @@ public class CustomerCaseService {
             throw new AppException(AUTH_RATE_LIMITED.getCode(), "注册请求过于频繁，请稍后重试");
         }
         String normalized = normalizeLoginName(command.loginName());
-        validatePassword(command.password());
+        PasswordPolicy.check(command.password());
         if (repository.findByLoginName(normalized).isPresent()) {
-            throw new AppException(INVALID_ARGUMENT.getCode(), "登录账号已注册");
+            throw new AppException(CONFLICT.getCode(), "登录账号已注册");
         }
         return repository.save(CustomerUserEntity.builder().loginName(normalized)
                 .passwordHash(passwordEncoder.encode(command.password()))
@@ -85,11 +87,5 @@ public class CustomerCaseService {
             throw new AppException(INVALID_ARGUMENT.getCode(), "登录账号不合法");
         }
         return normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private void validatePassword(String password) {
-        if (password == null || password.length() < 8 || password.length() > 72) {
-            throw new AppException(INVALID_ARGUMENT.getCode(), "密码长度必须为8到72位");
-        }
     }
 }

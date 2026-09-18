@@ -102,7 +102,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
         Assertions.assertFalse(updatedUser.getStatus());
 
         Assertions.assertTrue(rbacService.deleteUser(DeleteRbacUserReq.builder().id(createdUser.getId()).build()));
-        assertIllegalParameter(() -> rbacService.queryUserById(createdUser.getId()));
+        assertNotFound(() -> rbacService.queryUserById(createdUser.getId()));
     }
 
     @Test
@@ -133,7 +133,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
         Assertions.assertFalse(updatedRole.getStatus());
 
         Assertions.assertTrue(rbacService.deleteRole(DeleteRbacRoleReq.builder().id(createdRole.getId()).build()));
-        assertIllegalParameter(() -> rbacService.queryRoleById(createdRole.getId()));
+        assertNotFound(() -> rbacService.queryRoleById(createdRole.getId()));
     }
 
     @Test
@@ -166,7 +166,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
         Assertions.assertEquals(3, updatedPermission.getPermType());
 
         Assertions.assertTrue(rbacService.deletePermission(DeleteRbacPermissionReq.builder().id(createdPermission.getId()).build()));
-        assertIllegalParameter(() -> rbacService.queryPermissionById(createdPermission.getId()));
+        assertNotFound(() -> rbacService.queryPermissionById(createdPermission.getId()));
     }
 
     @Test
@@ -299,7 +299,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
                 .mobile("13800000001")
                 .status(Boolean.TRUE)
                 .build());
-        assertIllegalParameter(() -> rbacService.createUser(CreateRbacUserReq.builder()
+        assertConflict(() -> rbacService.createUser(CreateRbacUserReq.builder()
                 .username(duplicateUserName)
                 .password("Pwd@0022")
                 .displayName("重复用户2")
@@ -315,7 +315,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
                 .roleDesc("desc")
                 .status(Boolean.TRUE)
                 .build());
-        assertIllegalParameter(() -> rbacService.createRole(CreateRbacRoleReq.builder()
+        assertConflict(() -> rbacService.createRole(CreateRbacRoleReq.builder()
                 .roleCode(duplicateRoleCode)
                 .roleName("重复角色2")
                 .roleDesc("desc2")
@@ -332,7 +332,7 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
                 .method("GET")
                 .status(Boolean.TRUE)
                 .build());
-        assertIllegalParameter(() -> rbacService.createPermission(CreateRbacPermissionReq.builder()
+        assertConflict(() -> rbacService.createPermission(CreateRbacPermissionReq.builder()
                 .permCode(duplicatePermCode)
                 .permName("重复权限2")
                 .permType(2)
@@ -424,15 +424,15 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
             Assertions.assertNotEquals(firstUser.getId(), secondUser.getId());
             Assertions.assertNotEquals(firstRole.getId(), secondRole.getId());
             Assertions.assertNotEquals(firstPermission.getId(), secondPermission.getId());
-            assertIllegalParameter(() -> rbacService.queryUserById(firstUser.getId()));
+            assertNotFound(() -> rbacService.queryUserById(firstUser.getId()));
             assertIllegalParameter(() -> rbacService.replaceUserRoles(ReplaceUserRolesReq.builder()
                     .userId(secondUser.getId()).roleIds(List.of(firstRole.getId())).build()));
             assertIllegalParameter(() -> createNamedPermission(
                     "it_perm_" + markerKeyword() + "_cross_parent", firstPermission.getId()));
 
             switchActor(1L, "test-admin");
-            assertIllegalParameter(() -> rbacService.queryRoleById(secondRole.getId()));
-            assertIllegalParameter(() -> rbacService.queryPermissionById(secondPermission.getId()));
+            assertNotFound(() -> rbacService.queryRoleById(secondRole.getId()));
+            assertNotFound(() -> rbacService.queryPermissionById(secondPermission.getId()));
         } finally {
             deleteTenantData(secondTenantId);
             switchActor(1L, "test-admin");
@@ -471,8 +471,22 @@ public class RbacServiceMysqlTest extends RbacMysqlTestSupport {
     }
 
     private void assertIllegalParameter(Executable executable) {
+        assertResponseCode(executable, Constants.ResponseCode.INVALID_ARGUMENT);
+    }
+
+    /** 授权通过后发现的目标资源不存在，统一为 404。 */
+    private void assertNotFound(Executable executable) {
+        assertResponseCode(executable, Constants.ResponseCode.NOT_FOUND);
+    }
+
+    /** 唯一键冲突（预检查与数据库兜底同语义），统一为 409。 */
+    private void assertConflict(Executable executable) {
+        assertResponseCode(executable, Constants.ResponseCode.CONFLICT);
+    }
+
+    private void assertResponseCode(Executable executable, Constants.ResponseCode expected) {
         AppException exception = Assertions.assertThrows(AppException.class, executable);
-        Assertions.assertEquals(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), exception.getCode());
+        Assertions.assertEquals(expected.getCode(), exception.getCode());
     }
 
     @TestConfiguration

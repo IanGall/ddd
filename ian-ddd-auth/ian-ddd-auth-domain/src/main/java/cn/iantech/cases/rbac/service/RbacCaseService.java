@@ -3,8 +3,11 @@ package cn.iantech.cases.rbac.service;
 import cn.iantech.cases.model.Actor;
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
+import cn.iantech.domain.auth.infra.IPasswordEncoder;
+import cn.iantech.domain.auth.service.PasswordPolicy;
 import cn.iantech.domain.model.DomainPage;
 import cn.iantech.domain.rbac.model.RbacPermissionCode;
+import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
 import cn.iantech.domain.rbac.model.entity.RbacPermissionEntity;
 import cn.iantech.domain.rbac.model.entity.RbacRoleEntity;
 import cn.iantech.domain.rbac.model.entity.RbacUserEntity;
@@ -13,8 +16,11 @@ import cn.iantech.domain.rbac.service.impl.RbacAccountService;
 import cn.iantech.domain.rbac.service.impl.RbacDomainService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Objects;
@@ -23,6 +29,10 @@ import static cn.iantech.cases.rbac.model.RbacCaseCommands.*;
 
 /**
  * RBAC 用例编排，统一维护权限前置校验、审计和事务边界。
+ *
+ * <p><b>口令相关的入口使用 {@link TransactionTemplate} 显式收窄事务范围</b>：BCrypt 约 100ms，
+ * 若与落库同处一个事务会长时间占用连接池连接。因此「校验 → 编码」在事务外完成，事务只包住
+ * 数据库写入；其余不涉及慢哈希的入口继续使用 {@code @Transactional}。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -31,22 +41,36 @@ public class RbacCaseService {
     private final RbacDomainService rbacDomainService;
     private final RbacAccountService accountService;
     private final RbacAccessControlService accessControlService;
+    private final IPasswordEncoder passwordEncoder;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 开户：口令校验与编码在事务外完成，事务只包住「账号落库 + 内置权限初始化」。
+     */
     public AccountResult createAccount(CreateAccount command) {
         requireRequest(command);
-        var account = accountService.createAccount(command.username(), command.password(), command.displayName(),
-                command.email(), command.mobile());
+        PasswordPolicy.check(command.password());
+        String passwordHash = encodeOutsideTransaction(command.password());
+        RbacAccountEntity account = transactionTemplate.execute(status -> accountService.createAccount(
+                command.username(), passwordHash, command.displayName(), command.email(), command.mobile()));
+        if (account == null) {
+            throw new IllegalStateException("开户事务未返回账号结果");
+        }
         return new AccountResult(account.getId(), account.getUsername(),
                 account.getUsername() + "@" + account.getId() + ".com");
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 建子账号：<b>授权先于哈希</b>，避免无权限请求也付出约 100ms 的编码代价。
+     */
     public RbacUserEntity createUser(Actor actor, CreateUser command) {
         authorize(actor, RbacPermissionCode.USER_CREATE);
         requireRequest(command);
-        return rbacDomainService.createUser(actor.accountId(), command.username(), command.password(),
-                command.displayName(), command.email(), command.mobile(), command.status());
+        PasswordPolicy.check(command.password());
+        String passwordHash = encodeOutsideTransaction(command.password());
+        return transactionTemplate.execute(status -> rbacDomainService.createUser(actor.accountId(),
+                command.username(), passwordHash, command.displayName(), command.email(), command.mobile(),
+                command.status()));
     }
 
     public RbacUserEntity queryUserById(Actor actor, Long id) {
@@ -62,12 +86,15 @@ public class RbacCaseService {
                 query.username(), query.status());
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 改子账号：空白口令表示<b>不改密</b>——不校验、不编码，向写入阶段传 {@code null}。
+     */
     public RbacUserEntity updateUser(Actor actor, UpdateUser command) {
         authorize(actor, RbacPermissionCode.USER_UPDATE);
         requireRequest(command);
-        return rbacDomainService.updateUser(actor.accountId(), command.id(), command.password(), command.displayName(),
-                command.email(), command.mobile(), command.status());
+        String passwordHash = encodePasswordIfPresent(command.password());
+        return transactionTemplate.execute(status -> rbacDomainService.updateUser(actor.accountId(), command.id(),
+                passwordHash, command.displayName(), command.email(), command.mobile(), command.status()));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -190,6 +217,30 @@ public class RbacCaseService {
         }
         return accessControlService.findEffectivePermissionCodes(actor.accountId(), actor.userId(),
                 actor.principalName());
+    }
+
+    /**
+     * 空白口令表示不改密，返回 {@code null}；否则先校验长度再编码。
+     */
+    private String encodePasswordIfPresent(String rawPassword) {
+        if (StringUtils.isBlank(rawPassword)) {
+            return null;
+        }
+        PasswordPolicy.check(rawPassword);
+        return encodeOutsideTransaction(rawPassword);
+    }
+
+    /**
+     * 口令编码必须在事务外执行：BCrypt 约 100ms，进入事务会长时间占用连接池连接。
+     *
+     * <p>若调用方已开启外层事务则直接拒绝，而不是静默地在事务内编码——本入口明确不支持
+     * 嵌套在外层事务中调用；将来若确有该需求，应另行评估传播语义，而不是就地放开。</p>
+     */
+    private String encodeOutsideTransaction(String rawPassword) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("口令编码不得在事务边界内执行");
+        }
+        return passwordEncoder.encode(rawPassword);
     }
 
     private void requireRequest(Object command) {

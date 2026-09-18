@@ -11,6 +11,11 @@ public interface IRbacPermissionDao {
 
     int insert(RbacPermissionPO rbacPermissionPO);
 
+    /**
+     * 批量插入权限。不声明 generated keys：调用方不使用权限主键，避免依赖批量回填的驱动差异。
+     */
+    int insertBatch(@Param("list") List<RbacPermissionPO> list);
+
     RbacPermissionPO selectById(@Param("accountId") Long accountId, @Param("id") Long id);
 
     RbacPermissionPO selectByPermCode(@Param("accountId") Long accountId, @Param("permCode") String permCode);

@@ -74,6 +74,23 @@ class CustomerCaseServiceTest {
     }
 
     @Test
+    void shouldRejectPasswordExceedingByteLimit() {
+        AppException exception = assertThrows(AppException.class,
+                () -> service.register(command("13800000006", CLIENT_IP, "码".repeat(25))));
+
+        assertEquals(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), exception.getCode());
+        assertTrue(repository.savedLoginNames.isEmpty(), "口令非法时不应落库");
+    }
+
+    @Test
+    void shouldAcceptThreeChineseCharactersAsPassword() {
+        CustomerUserEntity saved = service.register(command("13800000007", CLIENT_IP, "密码啊"));
+
+        assertEquals("encoded:密码啊", saved.getPasswordHash(),
+                "C 端应与管理端同口径：按 UTF-8 字节计长，3 个中文（9 字节）合法");
+    }
+
+    @Test
     void shouldRejectNullCommandBeforeTouchingRiskStoreOrRepository() {
         assertThrows(AppException.class, () -> service.register(null));
 
@@ -82,7 +99,11 @@ class CustomerCaseServiceTest {
     }
 
     private CustomerRegisterCommand command(String loginName, String ipAddress) {
-        return new CustomerRegisterCommand(loginName, "pwd-1234", "C 端用户", ipAddress);
+        return command(loginName, ipAddress, "pwd-1234");
+    }
+
+    private CustomerRegisterCommand command(String loginName, String ipAddress, String password) {
+        return new CustomerRegisterCommand(loginName, password, "C 端用户", ipAddress);
     }
 
     /**

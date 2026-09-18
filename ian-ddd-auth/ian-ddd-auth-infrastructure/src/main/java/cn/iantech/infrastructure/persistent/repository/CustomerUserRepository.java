@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
+import static cn.iantech.common.constant.Constants.ResponseCode.CONFLICT;
 
 @Repository
 public class CustomerUserRepository implements ICustomerUserRepository {
@@ -38,7 +38,7 @@ public class CustomerUserRepository implements ICustomerUserRepository {
         } catch (DuplicateKeyException exception) {
             // 并发注册时由 uk_customer_user_login_name 兜底；在此收口为业务异常，
             // 应用层（cases）无需感知具体的持久化技术栈
-            throw new AppException(INVALID_ARGUMENT.getCode(), "登录账号已注册");
+            throw new AppException(CONFLICT.getCode(), "登录账号已注册");
         }
         return converter.convert(po, CustomerUserEntity.class);
     }

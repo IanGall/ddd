@@ -2,7 +2,6 @@ package cn.iantech.domain.rbac.service.impl;
 
 import cn.iantech.common.constant.Constants;
 import cn.iantech.common.exception.AppException;
-import cn.iantech.domain.auth.infra.IPasswordEncoder;
 import cn.iantech.domain.rbac.infra.*;
 import cn.iantech.domain.rbac.model.RbacPermissionCode;
 import cn.iantech.domain.rbac.model.entity.RbacAccountEntity;
@@ -37,8 +36,6 @@ class RbacPermissionSecurityTest {
     @Mock
     private IRbacRelationRepository relationRepository;
     @Mock
-    private IPasswordEncoder passwordEncoder;
-    @Mock
     private IRbacAccountRepository accountRepository;
 
     private RbacDomainService domainService;
@@ -46,7 +43,7 @@ class RbacPermissionSecurityTest {
     @BeforeEach
     void setUp() {
         domainService = new RbacDomainService(userRepository, roleRepository, permissionRepository,
-                relationRepository, passwordEncoder, accountRepository);
+                relationRepository, accountRepository);
     }
 
     @Test
@@ -93,31 +90,22 @@ class RbacPermissionSecurityTest {
 
     @Test
     void shouldMarkInitializedPermissionsAsSystemManaged() {
-        RbacAccountService accountService = new RbacAccountService(accountRepository, permissionRepository, passwordEncoder);
-        when(passwordEncoder.encode("Pwd@0001")).thenReturn("encoded-password");
+        RbacAccountService accountService = new RbacAccountService(accountRepository, permissionRepository);
         when(accountRepository.save(any())).thenReturn(RbacAccountEntity.builder().id(1L).username("admin").build());
-        when(permissionRepository.save(anyLong(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
-        accountService.createAccount("admin", "Pwd@0001", "管理员", "admin@test.com", "13800000000");
+        // 口令摘要由调用方（cases 层）在事务外编码后传入，本服务不再持有编码器
+        accountService.createAccount("admin", "encoded-password", "管理员", "admin@test.com", "13800000000");
 
-        ArgumentCaptor<RbacPermissionEntity> captor = ArgumentCaptor.forClass(RbacPermissionEntity.class);
-        // 每个目录项应各写入一条系统内置权限；断言与目录长度绑定，避免新增权限码时漏改用例
-        verify(permissionRepository, Mockito.times(RbacPermissionCode.values().length))
-                .save(ArgumentMatchers.eq(1L), captor.capture());
-        Assertions.assertTrue(captor.getAllValues().stream().allMatch(RbacPermissionEntity::getSystemManaged));
-    }
-
-    @Test
-    void shouldValidatePasswordByUtf8Bytes() {
-        RbacAccountService accountService = new RbacAccountService(accountRepository, permissionRepository, passwordEncoder);
-
-        AppException tooShort = Assertions.assertThrows(AppException.class, () ->
-                accountService.createAccount("admin", "1234567", "", "", ""));
-        AppException tooLong = Assertions.assertThrows(AppException.class, () ->
-                accountService.createAccount("admin", "密".repeat(25), "", "", ""));
-
-        Assertions.assertEquals(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), tooShort.getCode());
-        Assertions.assertEquals(Constants.ResponseCode.INVALID_ARGUMENT.getCode(), tooLong.getCode());
+        // 内置权限目录改为一次批量写入，断言与目录长度绑定，避免新增权限码时漏改用例
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<RbacPermissionEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(permissionRepository, Mockito.times(1)).saveAll(ArgumentMatchers.eq(1L), captor.capture());
+        List<RbacPermissionEntity> saved = captor.getValue();
+        Assertions.assertEquals(RbacPermissionCode.values().length, saved.size());
+        Assertions.assertTrue(saved.stream().allMatch(RbacPermissionEntity::getSystemManaged),
+                "内置权限必须全部标记为系统托管");
+        Assertions.assertTrue(saved.stream().allMatch(permission -> permission.getAccountId().equals(1L)),
+                "权限归属必须以传入的 accountId 为准");
     }
 
     private RbacPermissionEntity permission(Long id, Long parentId, String code, boolean systemManaged) {

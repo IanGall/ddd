@@ -39,8 +39,8 @@ class AppAuthE2eTest {
         assertEquals(loginName, registered.path("loginName").asText());
         assertTrue(registered.path("status").asBoolean(), "注册后账号应启用");
 
-        // 2. 重复注册必须被拒绝
-        assertEquals("INVALID_ARGUMENT", CoverageE2eSupport.post("/api/app/auth/register", """
+        // 2. 重复注册必须被拒绝（登录名唯一，语义为冲突 → 409）
+        assertEquals("CONFLICT", CoverageE2eSupport.post("/api/app/auth/register", """
                 {"loginName":"%s","password":"%s","displayName":"重复注册"}"""
                 .formatted(loginName, password)).errorCode());
 

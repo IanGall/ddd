@@ -97,12 +97,22 @@ public class AuthCaseService {
                 sessionStore.revokeSession(reference.userId(), session.sessionId(), Instant.now()));
     }
 
+    /**
+     * 撤销当前主体名下的全部设备会话族。
+     *
+     * <p><b>并发语义</b>：撤销范围是本方法读取到的活动会话族；读取与撤销之间发生的并发登录
+     * 可能不在范围内，未被读取到的新会话族不保证被撤销。这与逐个撤销的既有行为一致，
+     * 不构成强一致快照。</p>
+     *
+     * <p>撤销后 access 与 refresh 令牌均无法继续使用：access 索引被删除，refresh 则依赖
+     * 会话上的 {@code revokedAt} 状态在轮换脚本中二次校验后拒绝。</p>
+     */
     public void logoutAll(String accessToken) {
         AuthSession current = accessSession(accessToken);
         Long userId = current.userId();
-        sessionStore.findActiveByUser(userId).stream()
-                .map(AuthSession::familyId).distinct()
-                .forEach(familyId -> sessionStore.revokeFamily(userId, familyId, Instant.now()));
+        List<String> familyIds = sessionStore.findActiveByUser(userId).stream()
+                .map(AuthSession::familyId).distinct().toList();
+        sessionStore.revokeFamilies(userId, familyIds, Instant.now());
     }
 
     public List<SessionResult> sessions(String accessToken) {

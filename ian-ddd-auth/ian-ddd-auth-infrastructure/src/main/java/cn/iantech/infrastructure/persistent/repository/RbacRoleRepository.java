@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static cn.iantech.common.constant.Constants.ResponseCode.INVALID_ARGUMENT;
+import static cn.iantech.common.constant.Constants.ResponseCode.CONFLICT;
 
 @Repository
 @RequiredArgsConstructor
@@ -34,7 +34,7 @@ public class RbacRoleRepository implements IRbacRoleRepository {
             rbacRoleDao.insert(rbacRolePO);
         } catch (DuplicateKeyException exception) {
             // 并发写入唯一索引兜底，避免裸 DuplicateKeyException 直接 500
-            throw new AppException(INVALID_ARGUMENT.getCode(), "角色编码已存在");
+            throw new AppException(CONFLICT.getCode(), "角色编码已存在");
         }
         return converter.convert(rbacRolePO, RbacRoleEntity.class);
     }
@@ -72,7 +72,7 @@ public class RbacRoleRepository implements IRbacRoleRepository {
         try {
             return rbacRoleDao.updateById(accountId, po);
         } catch (DuplicateKeyException exception) {
-            throw new AppException(INVALID_ARGUMENT.getCode(), "角色编码已存在");
+            throw new AppException(CONFLICT.getCode(), "角色编码已存在");
         }
     }
 

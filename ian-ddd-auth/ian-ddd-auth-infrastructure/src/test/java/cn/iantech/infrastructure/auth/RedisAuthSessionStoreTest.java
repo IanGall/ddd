@@ -115,6 +115,40 @@ class RedisAuthSessionStoreTest {
                 AuthRedisKey.session(expired.userId(), expired.sessionId())));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldRevokeAllFamiliesInSingleCallKeepingSameHashTag() {
+        when(redisService.executeLongScript(anyString(), anyList(), anyList())).thenReturn(1L);
+
+        store.revokeFamilies(2L, List.of("family-1", "family-2", "family-1"), Instant.now());
+
+        ArgumentCaptor<List<String>> keysCaptor = stringListCaptor();
+        ArgumentCaptor<List<Object>> argumentsCaptor =
+                ArgumentCaptor.forClass((Class<List<Object>>) (Class<?>) List.class);
+        verify(redisService, times(1)).executeLongScript(anyString(), keysCaptor.capture(), argumentsCaptor.capture());
+
+        String prefix = "auth:session:v4:{2}:";
+        List<String> keys = keysCaptor.getValue();
+        // KEYS 按去重后的 family 键声明 Cluster Slot，必须落在同一槽
+        assertEquals(List.of(prefix + "family:family-1", prefix + "family:family-2"), keys);
+        assertSameHashTag(keys);
+
+        // ARGV[1]=作用域前缀、ARGV[2]=撤销时间戳、ARGV[3..]=去重后的 familyId
+        List<Object> arguments = argumentsCaptor.getValue();
+        assertEquals(4, arguments.size());
+        assertEquals(prefix, arguments.get(0));
+        assertEquals("family-1", arguments.get(2));
+        assertEquals("family-2", arguments.get(3));
+    }
+
+    @Test
+    void shouldSkipRedisCallWhenNoFamilyToRevoke() {
+        store.revokeFamilies(2L, List.of(), Instant.now());
+        store.revokeFamilies(2L, null, Instant.now());
+
+        verifyNoInteractions(redisService);
+    }
+
     private AuthSession session(String sessionId, String familyId, Long accountId, Long userId, String userType,
                                 Instant baseTime) {
         return new AuthSession(sessionId, familyId, accountId, userId, "operator", userType,

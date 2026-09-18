@@ -20,14 +20,17 @@ class RbacWebRequestsValidationTest {
     }
 
     @Test
-    void shouldLimitUserPasswordToEightThroughSeventyTwoCharacters() {
-        RbacWebRequests.CreateUser valid = new RbacWebRequests.CreateUser(
-                "operator", "a".repeat(72), null, null, null, true);
-        RbacWebRequests.CreateUser tooLong = new RbacWebRequests.CreateUser(
+    void shouldLeavePasswordLengthToAuthServiceAndOnlyRejectBlank() {
+        RbacWebRequests.CreateUser blank = new RbacWebRequests.CreateUser(
+                "operator", "   ", null, null, null, true);
+        RbacWebRequests.CreateUser tooLongForGateway = new RbacWebRequests.CreateUser(
                 "operator", "a".repeat(73), null, null, null, true);
 
-        assertTrue(VALIDATOR.validate(valid).isEmpty());
-        assertFalse(VALIDATOR.validate(tooLong).isEmpty());
+        // 网关只负责「非空」；8~72 个 UTF-8 字节的口径由 auth 服务的 PasswordPolicy 单一来源裁定。
+        // 刻意不在网关用 @Size：Bean Validation 对 String 按字符计长，与服务端的字节口径会形成两套规则
+        // （历史上导致 3 个中文这类合法口令在网关层被误拒）。
+        assertFalse(VALIDATOR.validate(blank).isEmpty(), "空白密码应在网关层被拒");
+        assertTrue(VALIDATOR.validate(tooLongForGateway).isEmpty(), "口令长度不再由网关裁定");
     }
 
     @Test

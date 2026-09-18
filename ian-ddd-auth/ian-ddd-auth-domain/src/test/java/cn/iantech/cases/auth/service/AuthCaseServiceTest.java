@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -297,6 +298,12 @@ class AuthCaseServiceTest {
                         sessions.put(session.sessionId(), session.revoke(revokedAt, session.replacedBy()));
                         accessIndex.remove(session.accessTokenHash());
                     });
+        }
+
+        @Override
+        public synchronized void revokeFamilies(Long userId, Collection<String> familyIds, Instant revokedAt) {
+            familyIds.stream().filter(familyId -> familyId != null).distinct()
+                    .forEach(familyId -> revokeFamily(userId, familyId, revokedAt));
         }
 
         @Override
