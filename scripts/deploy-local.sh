@@ -13,7 +13,13 @@
 # 选项：
 #   --service all|auth|gateway   默认 all；clean 时只清单个服务的资源（命名空间与另一个服务保留）
 #   --profile dev|prod           默认 dev；prod 需要自备强密钥（见下）
-#   --k8s-namespace NAME         k8s 命名空间，默认 ian-ddd（等价别名 --namespace）
+#   --k8s-namespace NAME         k8s 命名空间，默认**从项目目录名派生**（/path/to/ian-<前缀> → ian-<前缀>，
+#                                例：ian-rcs → ian-rcs）；目录名不符合 ian-* 约定时回退 ian-ddd（等价别名 --namespace）
+#
+# 项目前缀（PROJECT_PREFIX）由项目目录名派生，是以下三项的**单一来源**，使复制出的新项目无需改脚本：
+#   · 镜像名（system/ian-<前缀>-auth-boot:1.0-SNAPSHOT，避免与源项目互相覆盖）
+#   · k8s 命名空间（ian-<前缀>）
+#   · Nacos 命名空间与 ID 生成器命名空间（ian-<前缀> / ian-<前缀>-auth-boot）
 #   --nacos-namespace NAME       Nacos 命名空间（=注册中心的租户 ID），默认 dev-test；
 #                                传 public 或空字符串表示用默认命名空间（地址里不加 namespace 参数）
 #   --replicas N|keep            本地副本数，默认 1（两个服务各 1 个 Pod，HPA minReplicas 同步收到 N）；
@@ -59,7 +65,7 @@ cd "${REPO_ROOT}"
 ACTION="deploy"
 SERVICE="all"
 PROFILE="dev"
-NAMESPACE="ian-ddd"
+NAMESPACE=""                 # 空 = 未指定，稍后由项目目录名派生（见下），使复制出的新项目无需改脚本
 NACOS_NAMESPACE_CLI=""      # 由 --nacos-namespace 赋值；空 = 未指定，走环境变量/.env.local/默认值
 SKIP_BUILD="no"
 REPLICAS="1"
@@ -127,6 +133,20 @@ case "${REPLICAS}" in
   keep) ;;
   '' | *[!0-9]*) die "--replicas 只支持 keep 或非负整数（当前：${REPLICAS}）" ;;
 esac
+# 项目前缀：从项目目录名派生（/path/to/ian-<前缀> → <前缀>）。
+# 它是「复制本项目派生的新项目无需改脚本」的**单一来源**——镜像名与两个命名空间都由它派生。
+if [ -z "${PROJECT_PREFIX:-}" ]; then
+  _derived_base="$(basename "$(cd "${REPO_ROOT}/.." && pwd)")"
+  case "${_derived_base}" in
+    ian-*) PROJECT_PREFIX="${_derived_base#ian-}" ;;
+    *)     PROJECT_PREFIX="ddd" ;;   # 目录名不符合约定时回退到历史默认值
+  esac
+fi
+
+# k8s 命名空间：默认 ian-<前缀>；可用 --k8s-namespace 或环境变量 NAMESPACE 覆盖。
+if [ -z "${NAMESPACE}" ]; then
+  NAMESPACE="ian-${PROJECT_PREFIX}"
+fi
 [ -n "${NAMESPACE}" ] || die "命名空间不能为空"
 case "${NAMESPACE}" in default | kube-system | kube-public | kube-node-lease) die "拒绝操作系统命名空间 ${NAMESPACE}" ;; esac
 command -v kubectl >/dev/null || die "找不到 kubectl"
@@ -150,9 +170,13 @@ service_prefix() {
   esac
 }
 service_image() {
+  # 镜像名带**项目前缀**。本机 Docker 镜像库是全局共享的：若两个项目构建同名同 tag 的镜像，
+  # 后者会静默覆盖前者，而 k8s 用 imagePullPolicy: IfNotPresent —— 已在跑的 Pod 不受影响，
+  # 但**重启 / HPA 扩容 / 节点漂移**产生的新 Pod 会拉到被覆盖的镜像，即「A 命名空间跑 B 项目的代码」。
+  # 由于两个项目的 Deployment / Pod / Service 名相同，这类问题极难排查，故镜像名必须隔离。
   case "$1" in
-    auth) echo "${IMAGE_PREFIX:-system}/ian-ddd-auth-boot:1.0-SNAPSHOT" ;;
-    gateway) echo "${IMAGE_PREFIX:-system}/ian-ddd-gateway:1.0-SNAPSHOT" ;;
+    auth) echo "${IMAGE_PREFIX:-system}/ian-${PROJECT_PREFIX}-auth-boot:1.0-SNAPSHOT" ;;
+    gateway) echo "${IMAGE_PREFIX:-system}/ian-${PROJECT_PREFIX}-gateway:1.0-SNAPSHOT" ;;
   esac
 }
 # 把 all 展开成具体服务列表
@@ -304,11 +328,14 @@ load_config() {
   resolve NACOS_HOST "nacos.infra.svc.cluster.local"
   # 宿主机可达的 Nacos HTTP 入口，仅用于「确保命名空间存在」这一步
   resolve NACOS_API_URL "http://127.0.0.1:8848"
-  # 注册中心命名空间：--nacos-namespace > 环境变量/.env.local 的 DUBBO_REGISTRY_NAMESPACE > 默认 dev-test
+  # 注册中心命名空间：--nacos-namespace > 环境变量/.env.local 的 DUBBO_REGISTRY_NAMESPACE > 默认 ian-<前缀>
+  # 默认值按项目前缀派生：两个项目若共用同一 Nacos 命名空间，Dubbo 会把**同名服务**视为
+  # 「同一服务的多个实例」并随机负载均衡，表现为随机的「账号或密码错误」。
+  # 既有项目需在 .env.local 显式声明自己的命名空间以保持原状（如源项目用 dev-test）。
   if [ -n "${NACOS_NAMESPACE_CLI}" ]; then
     DUBBO_REGISTRY_NAMESPACE="${NACOS_NAMESPACE_CLI}"
   else
-    resolve DUBBO_REGISTRY_NAMESPACE "dev-test"
+    resolve DUBBO_REGISTRY_NAMESPACE "ian-${PROJECT_PREFIX}"
   fi
   # public 就是默认命名空间，等价于「不加 namespace 参数」
   if [ "${DUBBO_REGISTRY_NAMESPACE}" = "public" ]; then
@@ -318,7 +345,9 @@ load_config() {
   resolve KAFKA_BOOTSTRAP_SERVERS "kafka.infra.svc.cluster.local:9092"
   # 本地 infra 的 Kafka 通告地址是 kafka:9092，跨命名空间解析不了；默认关掉降噪
   resolve KAFKA_ENABLED "false"
-  resolve DDD_ID_GENERATOR_NAMESPACE "ian-ddd-auth-boot"
+  # ID 生成器命名空间（P0）：两个项目若取同一命名空间，会各自租到**同一个 WorkerId**，
+  # 生成的雪花 ID 必然重复。默认按项目前缀派生。
+  resolve DDD_ID_GENERATOR_NAMESPACE "ian-${PROJECT_PREFIX}-auth-boot"
   resolve CHANNEL_ENCRYPTION_KEY_ID "dev-key-v1"
   resolve IMAGE_PREFIX "system"
   resolve MYSQL_USERNAME ""
@@ -481,14 +510,20 @@ apply_config() {
 }
 
 apply_manifests() {
-  local svc="$1" dir prefix files
+  local svc="$1" dir prefix files img
   dir="$(service_dir "${svc}")"
   prefix="$(service_prefix "${svc}")"
+  img="$(service_image "${svc}")"
+  # deployment.yaml 里的 image 是静态值，这里替换为按项目前缀派生的镜像名后再 apply。
+  # 目的：即使清单文件里的名字与当前项目不符（例如清单被复制而漏改），
+  # 也不会把别的项目的镜像名带进本命名空间。清单其余字段不动。
+  sed "s|^\( *image:\).*|\1 ${img}|" "${dir}/deployment.yaml" \
+    | kubectl apply -n "${NAMESPACE}" -f - >/dev/null
   # 刻意逐文件 apply，不用 -f <目录>：目录里的 configmap.yaml 是 prod 默认值，会把按 profile 生成的配置冲掉
-  files=(-f "${dir}/deployment.yaml" -f "${dir}/service.yaml" -f "${dir}/hpa.yaml" -f "${dir}/pdb.yaml")
+  files=(-f "${dir}/service.yaml" -f "${dir}/hpa.yaml" -f "${dir}/pdb.yaml")
   [ "${svc}" = "gateway" ] && files+=(-f "${dir}/ingress.yaml")
   kubectl apply -n "${NAMESPACE}" "${files[@]}" >/dev/null
-  log "已应用清单：${dir}"
+  log "已应用清单：${dir}（镜像 ${img}）"
 }
 
 # 本地副本数：默认收到 1 个，避免在开发机上白占内存；同时把 HPA 的 minReplicas 一起改，

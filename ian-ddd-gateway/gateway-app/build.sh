@@ -18,7 +18,13 @@ set -euo pipefail
 # 因为下面的 -f ./Dockerfile 与构建上下文 . 都是相对当前目录解析的
 cd "$(dirname "$0")"
 
-IMAGE="${IMAGE:-system/ian-ddd-gateway}"
+# 镜像名带**项目前缀**（从项目目录名派生），与 scripts/deploy-local.sh 的派生规则一致。
+# 原因：本机 Docker 镜像库全局共享，两个项目构建同名镜像会互相覆盖，
+# 导致 k8s 在 Pod 重启/扩容时把别的项目的镜像拉进本命名空间（Pod 名相同，极难排查）。
+_PROJ_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_PROJ_BASE="$(basename "${_PROJ_ROOT}")"
+case "${_PROJ_BASE}" in ian-*) _PROJ_PREFIX="${_PROJ_BASE#ian-}" ;; *) _PROJ_PREFIX="ddd" ;; esac
+IMAGE="${IMAGE:-system/ian-${_PROJ_PREFIX}-gateway}"
 TAG="${TAG:-1.0-SNAPSHOT}"
 
 # 未显式指定架构时跟随 Docker 服务端架构；守护进程不可达时退回本机 uname
